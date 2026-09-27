@@ -83,5 +83,11 @@
   "aifisherRuntime": {
     "winX64Sha256": "5c976096e04e5c2c1f091938926234cc9fbebfe9787ddd149351b3b0ecc707b5"
   },
-  "license": "SEE LICENSE IN LICENSE"
+  "license": "SEE LICENSE IN LICENSE",
+  "allowScripts": {
+    "sqlite3@6.0.1": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260820.1": true
+  }
 }

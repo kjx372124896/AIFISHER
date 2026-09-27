@@ -1,5 +1,9 @@
 node_modules/
-runtime/
+/runtime/
+!server/runtime/
+!server/runtime/**
+!scripts/runtime/
+!scripts/runtime/**
 bin/
 dist/
 .desktop-dev/

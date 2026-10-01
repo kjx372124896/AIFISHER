@@ -62,7 +62,7 @@ export function createProviderFrameworkRouter({ store = providerFrameworkStore }
           ...(provider.headers || {}),
         },
       };
-      const upstream = await BaseProvider.fetch(url, options);
+      const upstream = await BaseProvider.fetchWithSystemProxyFallback(url, options);
       const text = await upstream.text();
       let body;
       try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }
@@ -76,7 +76,7 @@ export function createProviderFrameworkRouter({ store = providerFrameworkStore }
       const state = store.read();
       const provider = state.providers.find((item) => item.id === request.params.id);
       if (!provider) throw new Error('供应商不存在');
-      const upstream = await BaseProvider.fetch(joinUrl(provider.baseUrl, provider.modelsPath || '/v1/models'), {
+      const upstream = await BaseProvider.fetchWithSystemProxyFallback(joinUrl(provider.baseUrl, provider.modelsPath || '/v1/models'), {
         method: 'GET',
         headers: {
           ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),

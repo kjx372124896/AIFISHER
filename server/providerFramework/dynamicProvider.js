@@ -65,7 +65,7 @@ function headers(provider, protocol, extra = {}) {
 
 async function fetchJson(url, options, params) {
   BaseProvider.injectProxy(options, params.useProxy);
-  const response = await BaseProvider.fetch(url, options);
+  const response = await BaseProvider.fetchWithSystemProxyFallback(url, options);
   const text = await response.text();
   let body;
   try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }

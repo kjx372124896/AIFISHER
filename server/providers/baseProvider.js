@@ -5,6 +5,7 @@ import { annotateProviderError } from '../telemetry/providerDiagnostics.js';
  */
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'node:child_process';
 import { resolveImageToBase64 } from '../utils/imageHelpers.js';
 import { signTOSV4 } from '../utils/tosSigner.js';
 
@@ -14,6 +15,8 @@ import { signTOSV4 } from '../utils/tosSigner.js';
 let networkFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch : null;
 let NetworkFormData = networkFetch ? globalThis.FormData : null;
 let ProxyAgent = null;
+const proxyAgents = new Map();
+let windowsProxyCache = { value: null, expiresAt: 0 };
 try {
     const undici = await import('undici');
     if (!networkFetch && typeof undici.fetch === 'function') {
@@ -34,6 +37,68 @@ if (!networkFetch) {
     }
 }
 if (!networkFetch) throw new Error('当前 Node 运行时不支持 HTTP Fetch。');
+
+function proxyAgentFor(proxy) {
+    if (!proxy || !ProxyAgent) return null;
+    let agent = proxyAgents.get(proxy);
+    if (!agent) {
+        agent = new ProxyAgent(proxy);
+        proxyAgents.set(proxy, agent);
+    }
+    return agent;
+}
+
+function normalizeProxyAddress(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`;
+}
+
+function selectWindowsProxy(proxyServer, targetUrl) {
+    const raw = String(proxyServer || '').trim();
+    if (!raw) return null;
+    if (!raw.includes('=')) return normalizeProxyAddress(raw);
+    const entries = Object.fromEntries(
+        raw.split(';')
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .map((item) => {
+                const index = item.indexOf('=');
+                return index < 0 ? ['', item] : [item.slice(0, index).trim().toLowerCase(), item.slice(index + 1).trim()];
+            }),
+    );
+    let protocol = 'https';
+    try { protocol = new URL(targetUrl).protocol.replace(':', '').toLowerCase(); } catch {}
+    return normalizeProxyAddress(entries[protocol] || entries.https || entries.http || entries.socks || entries['']);
+}
+
+function windowsUserProxy(targetUrl) {
+    if (process.platform !== 'win32') return null;
+    const now = Date.now();
+    if (windowsProxyCache.expiresAt > now) return windowsProxyCache.value;
+    let value = null;
+    try {
+        const output = execFileSync(
+            'reg.exe',
+            ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+            { encoding: 'utf8', windowsHide: true, timeout: 3000 },
+        );
+        const enabled = /\bProxyEnable\s+REG_DWORD\s+0x1\b/i.test(output);
+        const match = output.match(/\bProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+        if (enabled && match) value = selectWindowsProxy(match[1], targetUrl);
+    } catch {}
+    windowsProxyCache = { value, expiresAt: now + 30_000 };
+    return value;
+}
+
+function isLocalTarget(url) {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    } catch {
+        return false;
+    }
+}
 
 export const BaseProvider = {
     /**
@@ -70,6 +135,23 @@ export const BaseProvider = {
      */
     get fetch() {
         return networkFetch;
+    },
+
+    /**
+     * 外部请求默认直连；若遇到连接重置/超时等网络错误，则自动读取 Windows
+     * 用户系统代理并重试。localhost/127.0.0.1 永远保持直连。
+     */
+    async fetchWithSystemProxyFallback(url, fetchOptions = {}) {
+        try {
+            return await networkFetch(url, fetchOptions);
+        } catch (error) {
+            if (isLocalTarget(url) || !this.isRetryableNetworkError(error)) throw error;
+            const proxy = windowsUserProxy(url);
+            const dispatcher = proxyAgentFor(proxy);
+            if (!dispatcher) throw error;
+            console.log(`[BaseProvider] Direct request failed (${error?.cause?.code || error?.code || error?.message || 'network error'}), retrying via Windows proxy ${proxy}`);
+            return networkFetch(url, { ...fetchOptions, dispatcher });
+        }
     },
 
     createFormData() {

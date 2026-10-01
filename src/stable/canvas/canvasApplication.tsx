@@ -31,6 +31,7 @@ import {
   useCanvasDeferredFrame,
   useCanvasSurfaceSize,
 } from './canvasApplicationEvents';
+import { bindCanvasPluginHost } from '../plugins/canvasPluginHost';
 export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
   const {
     usePanels,
@@ -45,8 +46,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
     useEdgePan,
     useHistory,
     useWorkflow,
-    useLocalUser,
-    userColorForId,
     NodeStatus,
     useGeneration,
     useSnapshots,
@@ -97,7 +96,7 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
     [chatPanelWidth, setChatPanelWidth] = React.useState(400),
     [settingsOpen, setSettingsOpen] = React.useState(false),
     [savedAt, setSavedAt] = React.useState<number | null | undefined>(void 0),
-    [savedBy, setSavedBy] = React.useState('用户-'),
+    [savedBy, setSavedBy] = React.useState('本机'),
     [savedRevision, setSavedRevision] = React.useState<number | null>(null),
     zoomControlsRef = React.useRef<HTMLDivElement | null>(null),
     pointerRef = React.useRef<{
@@ -319,17 +318,7 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
   const deferFrame = useCanvasDeferredFrame(React, view === 'canvas', getWorkflowEpoch);
   const windowSize = useCanvasSurfaceSize(React, canvasRef, view, getWorkflowEpoch());
 
-  const {
-      id: localUserId,
-      no: localUserNo,
-      name: localUserName,
-      setName: setLocalUserName,
-    } = useLocalUser(),
-    userColor = React.useMemo(
-      () => userColorForId(localUserId || localUserNo),
-      [localUserId, localUserNo, userColorForId],
-    ),
-    [dirty, setDirty] = React.useState(false),
+  const [dirty, setDirty] = React.useState(false),
     hasUnsavedChanges = dirty,
     firstEditRef = React.useRef(true),
     observedContentRef = React.useRef({ nodes, groups, title: canvasTitle }),
@@ -481,7 +470,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
       getNodes,
       getSelectedCoverId: () => selectedCoverRef.current,
       folderId,
-      userNo: localUserNo,
       saveWorkflow: handleSaveWorkflow,
       setDirty,
       setSavedAt,
@@ -535,6 +523,21 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
       setNodes,
       setSelectedNodeIds,
     });
+
+  React.useEffect(() => {
+    bindCanvasPluginHost({
+      getNodes: () => getNodes() as any,
+      setNodes: (updater) =>
+        setNodes((current) => updater(current as any) as CanvasNode[]),
+      setSelectedNodeIds,
+      getViewport: () => viewport,
+      setViewport,
+      createId,
+      projectId: workflowId || undefined,
+      runGeneration: handleGenerate,
+    });
+    return () => bindCanvasPluginHost(null);
+  }, [getNodes, setNodes, setSelectedNodeIds, viewport, setViewport, createId, workflowId, handleGenerate]);
 
   const handleUpscaleImage = useCanvasImageUpscale(React, {
     projectId: workflowId || undefined,
@@ -1311,10 +1314,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
           key: 'settings',
           isOpen: settingsOpen,
           onClose: () => setSettingsOpen(false),
-          localUserName,
-          setLocalUserName,
-          localUserId,
-          localUserNo,
         }),
       ],
     });
@@ -1399,8 +1398,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         onSettingsClick: () => {
           setSettingsOpen(true);
         },
-        currentUserName: localUserName,
-        currentUserColor: userColor,
       }),
       React.createElement(Scene, {
         key: 'scene',
@@ -1583,7 +1580,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         isChatOpen,
         onToggleChat: toggleChat,
         onCloseChat: closeChat,
-        localUserName,
         isDraggingNodeToChat,
         chatPanelWidth,
         onChatPanelWidthChange: setChatPanelWidth,
@@ -1662,10 +1658,6 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         key: 'settings',
         isOpen: settingsOpen,
         onClose: () => setSettingsOpen(false),
-        localUserName,
-        setLocalUserName,
-        localUserId,
-        localUserNo,
       }),
       annotatingNodeId &&
         React.createElement(Annotation, {

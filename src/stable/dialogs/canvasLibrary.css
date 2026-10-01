@@ -357,3 +357,141 @@
     padding-top: 10px;
   }
 }
+
+.fisher-library-folderbar,
+.fisher-library-batchbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 10px;
+  border: 1px solid var(--af-border);
+  border-radius: 9px;
+  background: var(--af-surface-raised);
+}
+.fisher-library-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.fisher-library-breadcrumbs button {
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--af-text-secondary);
+  white-space: nowrap;
+}
+.fisher-library-breadcrumbs button:not(:last-child)::after {
+  content: ' /';
+  margin-left: 8px;
+  color: var(--af-text-muted);
+}
+.fisher-library-folderbar > button,
+.fisher-library-batchbar button {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--af-border-control);
+}
+.fisher-library-folderbar .is-primary,
+.fisher-library-batchbar .is-primary {
+  color: var(--af-on-primary);
+  background: var(--af-primary);
+  border-color: transparent;
+}
+.fisher-library-folder-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.fisher-library-folder-create input {
+  width: 180px;
+  min-width: 140px;
+}
+.fisher-library-folder-create button {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--af-border-control);
+}
+.fisher-library-batchbar .is-danger {
+  color: var(--af-danger);
+}
+.fisher-library-folders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fisher-library-folder-card {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--af-border);
+  border-radius: 9px;
+  background: var(--af-surface-raised);
+}
+.fisher-library-folder-card > button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 11px 12px;
+  text-align: left;
+}
+.fisher-library-folder-card > button:first-child span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fisher-library-folder-icon {
+  font-size: 20px;
+}
+.fisher-library-folder-delete {
+  width: 30px;
+  height: 30px;
+  margin-right: 6px;
+  border-radius: 6px;
+  color: var(--af-text-muted);
+}
+.fisher-library-folder-delete:hover {
+  color: var(--af-danger);
+  background: var(--af-hover);
+}
+.fisher-library-card-select {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--af-input);
+  border: 1px solid var(--af-border-control);
+}
+.fisher-library-card-select input {
+  min-height: 0;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+}
+.fisher-library-card[data-selected='true'],
+.fisher-library-table tr[data-selected='true'] {
+  outline: 2px solid var(--af-primary);
+  outline-offset: -2px;
+}
+.fisher-library-select-col {
+  width: 56px !important;
+  text-align: center;
+}
+.fisher-library-table .fisher-library-select-col input {
+  min-height: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}

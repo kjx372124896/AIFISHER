@@ -28,7 +28,7 @@ export const OFFICIAL_DRAMA_BUNDLE = deepFreeze({
       height: field('61', 'value'),
     },
   },
-  scenes: { provider: 'relay', model: 'Seedream 5.0 Pro · API' },
+  scenes: { provider: 'dreamina-cli', model: 'Seedream 5.0 Pro · 即梦 CLI' },
   drama: {
     provider: 'runninghub-cn',
     webAppId: '2094859983199498241',

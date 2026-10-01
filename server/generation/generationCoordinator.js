@@ -531,22 +531,6 @@ export function createGenerationCoordinator({
     return cloneTask(recorded);
   }
 
-  function recordRejectedSubmission(nodeId, expectedAttemptId, slot) {
-    const task = getTask(nodeId);
-    if (!expectedAttemptId || task?.attemptId !== expectedAttemptId
-      || task.kind !== 'image' || task.providerName !== 'RelayImageProvider'
-      || !Number.isInteger(slot) || slot < 0 || slot >= task.requestedCount
-      || task.remoteSubmissionCount !== slot + 1 || task.remoteTasks?.[slot]) return false;
-    const details = { remoteSubmissionCount: slot };
-    if (task.status === 'loading') return update(nodeId, details, expectedAttemptId);
-    if (task.status !== 'unknown'
-      || !['GENERATION_SUBMISSION_UNKNOWN', 'GENERATION_OBSERVATION_INTERRUPTED', 'GENERATION_INTERRUPTED'].includes(task.code)) return false;
-    const recorded = { ...task, ...details, updatedAt: new Date(now()).toISOString() };
-    persist(recorded);
-    tasks.set(nodeId, recorded);
-    return cloneTask(recorded);
-  }
-
   function getTask(nodeId) {
     return cloneTask(tasks.get(nodeId) || taskStore?.get?.(nodeId));
   }
@@ -583,7 +567,6 @@ export function createGenerationCoordinator({
     reacquireObservation,
     reconcileRemoteTask,
     recordRemoteTask,
-    recordRejectedSubmission,
     release,
     requestCancel,
     update,

@@ -11,8 +11,6 @@ interface Props {
   onAssetsClick: ReactTypes.MouseEventHandler;
   onSettingsClick?(): void;
   onToolsOpen?(): void;
-  currentUserName?: string;
-  currentUserColor?: string;
 }
 interface Components {
   Tooltip: CanvasComponent;
@@ -21,12 +19,9 @@ interface Components {
   Workflow: CanvasComponent;
   History: CanvasComponent;
   Settings: CanvasComponent;
-  avatarClass(name: string, size: number): string;
-  avatarText(name: string): string;
 }
 export function CanvasSidebar(React: Runtime, props: Props, components: Components) {
   const { Tooltip, Add, Image, Workflow, History, Settings } = components;
-  const name = props.currentUserName ?? '协作者';
   const actions = [
     { label: '资产', action: props.onAssetsClick, icon: <Image size={20} /> },
     { label: '工作流节点', action: props.onWorkflowsClick, icon: <Workflow size={20} /> },
@@ -87,18 +82,6 @@ export function CanvasSidebar(React: Runtime, props: Props, components: Componen
             </button>
           </Tooltip>
         ))}
-      </div>
-      <div className="w-8 h-[1px] mt-1 bg-[var(--af-border)]" />
-      <div className="pt-3 pb-2">
-        <Tooltip text={`当前用户 ${name}`} position="right">
-          <div
-            data-fisherai-profile-avatar="local"
-            className={`w-10 h-10 rounded-full flex items-center justify-center border border-[var(--af-border-control)] shadow-lg shadow-blue-500/10 text-[var(--af-media-text)] [text-shadow:0_1px_2px_var(--af-media-bg),0_0_2px_var(--af-media-bg)] data-[has-custom-avatar=true]:[text-shadow:none] font-bold ${components.avatarClass(name, 40)}`}
-            style={{ background: props.currentUserColor ?? '#60a5fa' }}
-          >
-            {components.avatarText(name)}
-          </div>
-        </Tooltip>
       </div>
     </div>
   );

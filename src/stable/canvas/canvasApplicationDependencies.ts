@@ -60,8 +60,6 @@ export interface Dependencies {
   ): Omit<ReturnType<typeof useCanvasWorkflow>, 'handleLoadWorkflow'> & {
     handleLoadWorkflow(id: string): Promise<LoadedProject | null>;
   };
-  useLocalUser(): { id: string; no: string; name: string; setName(value: string): void };
-  userColorForId(id: string): string;
   NodeStatus: Record<'LOADING' | 'SUCCESS', string>;
   NodeType: Record<
     'IMAGE' | 'VIDEO' | 'AUDIO' | 'TEXT' | 'UPLOAD_IMAGE' | 'UPLOAD_VIDEO' | 'UPLOAD_AUDIO',

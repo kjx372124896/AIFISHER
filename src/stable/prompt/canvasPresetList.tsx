@@ -24,6 +24,7 @@ export function CanvasPresetList(
   const [selected, setSelected] = React.useState(0),
     [storedCategory, setCategory] = React.useState(''),
     [creating, setCreating] = React.useState(false),
+    [editingItem, setEditingItem] = React.useState<PresetListProps['items'][number] | null>(null),
     [removed, setRemoved] = React.useState<string[]>([]);
   const alive = React.useRef(false),
     rootRef = React.useRef<HTMLDivElement>(null),
@@ -123,9 +124,10 @@ export function CanvasPresetList(
 
   const closeForm = () => {
     setCreating(false);
+    setEditingItem(null);
     if (!props.editor?.isDestroyed) props.editor?.commands.focus();
   };
-  const panel = creating ? (
+  const panel = creating || editingItem ? (
     <div
       style={{
         width: 'min(768px, calc(100vw - 24px))',
@@ -139,6 +141,7 @@ export function CanvasPresetList(
       <CreateForm
         type={props.type || 'image'}
         initialCategory={category || categories[0] || ''}
+        initialItem={editingItem || undefined}
         onSave={() => {
           closeForm();
           setRemoved([]);
@@ -188,6 +191,10 @@ export function CanvasPresetList(
             isSelected={index === selected}
             onClick={() => select(index)}
             onMouseEnter={() => setSelected(index)}
+            onEdit={() => {
+              setEditingItem(item);
+              setCreating(false);
+            }}
             onDelete={() => remove(index)}
             key={item.title}
           />

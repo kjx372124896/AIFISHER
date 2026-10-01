@@ -18,13 +18,20 @@ export function CanvasAssetDialog(
 ) {
   const node = props.nodeToSnapshot;
   if (!props.isOpen || !node) return null;
+  let localFolders: string[] = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem('aifisher.asset-library.folders.v1') || '[]');
+    if (Array.isArray(stored)) localFolders = stored.filter((value): value is string => typeof value === 'string');
+  } catch {
+    localFolders = [];
+  }
   return runtime.createElement(Dialog, {
     isOpen: props.isOpen,
     onClose: props.onClose,
     title: '保存到资产',
     submitLabel: '保存',
     defaultName: assetDefaultName(node),
-    categories: [...new Set([...props.categories, ...ASSET_CATEGORIES])],
+    categories: [...new Set([...props.categories, ...ASSET_CATEGORIES, ...localFolders])],
     coverUrl: node.resultUrl || '',
     coverAlt: '资产封面',
     defaultOwnership: props.defaultOwnership || '',

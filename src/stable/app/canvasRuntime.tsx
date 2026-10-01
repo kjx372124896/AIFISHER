@@ -3,8 +3,6 @@ import { toPng } from 'html-to-image';
 import { CanvasApplication } from '../canvas/canvasApplication';
 import type { Dependencies } from '../canvas/canvasApplicationDependencies';
 import * as Components from './canvasComponents';
-import { avatarColor } from '../profile/canvasAvatar';
-import { useLocalUser } from '../profile/localUser';
 import { IMAGE_MODELS, VIDEO_MODELS, TEXT_MODELS, AUDIO_MODELS } from '../../config/modelConfig';
 import * as Rules from '../nodes/canvasNodeRules';
 import * as Editor from '../canvas/canvasEditorHooks';
@@ -103,8 +101,6 @@ const dependencies: Dependencies = {
   useWorkflow: optionsHook((options: Parameters<typeof useCanvasWorkflow>[1]) =>
     useCanvasWorkflow(React, options),
   ) as Dependencies['useWorkflow'],
-  useLocalUser: () => useLocalUser(React),
-  userColorForId: avatarColor,
   NodeStatus: Rules.nodeStatuses,
   NodeType: Rules.nodeTypes,
   useGeneration: optionsHook((options: Parameters<typeof Generation.useCanvasGeneration>[1]) =>

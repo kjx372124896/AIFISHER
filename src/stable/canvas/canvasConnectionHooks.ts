@@ -7,6 +7,8 @@ import {
   type CanvasConnectionIdentity,
 } from './canvasConnections';
 import type { CanvasViewport } from './canvasNavigation';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
 
 type Hooks = Pick<typeof React, 'useState' | 'useRef' | 'useCallback'>;
 type Side = 'left' | 'right';
@@ -20,7 +22,11 @@ interface WorkflowConnections {
   getOutputPortY?(node: Node, portIndex: number): number;
   resolveAvailableInputSlot(target: Node, source: Node, sourcePort: number): number;
   canConnect(target: Node, source: Node, targetPort: number, sourcePort: number): boolean;
-  getInputSlots(node: Node): { slotIndex: number }[];
+  getInputSlots(node: Node): Array<{
+    slotIndex: number;
+    mediaKind?: string;
+    source?: 'input-port' | 'parameter';
+  }>;
   getInputCapacity(node: Node): number;
   getConnectionLimitNotice(target: Node, source: Node, sourcePort: number): string | undefined;
 }
@@ -263,6 +269,61 @@ export function useCanvasConnections(hooks: Hooks, runtime: ConnectionRuntime) {
           : undefined,
     };
   };
+  const resolveBundleOperations = (
+    source: Node,
+    target: Node,
+  ): ConnectCanvasNodesOptions[] => {
+    if (target.kind !== 'workflow') return [];
+    const workflow = runtime.workflow();
+    if (!workflow) return [];
+    const resource = getCanvasPluginNodeDefinition(source.type)?.resource?.(
+      toPluginNode(source as any),
+    );
+    if (!resource || resource.kind !== 'bundle' || !resource.items.length) return [];
+    const slots = workflow.getInputSlots(target);
+    const parents = [...(target.parentIds ?? [])];
+    const reserved = new Set(
+      slots.filter((slot) => Boolean(parents[slot.slotIndex])).map((slot) => slot.slotIndex),
+    );
+    const compatibleKind = (sourceKind: string, targetKind?: string) =>
+      sourceKind === targetKind || (sourceKind === 'image' && targetKind === 'mask');
+    const items = [...resource.items]
+      .map((item, index) => ({
+        ...item,
+        sourcePortIndex: index,
+        order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
+      }))
+      .sort((left, right) => Number(left.order) - Number(right.order));
+    const inputCount = workflow.getInputCapacity(target);
+    const operations: ConnectCanvasNodesOptions[] = [];
+    for (const item of items) {
+      const slot = slots
+        .filter((candidate) => !reserved.has(candidate.slotIndex))
+        .filter((candidate) => compatibleKind(item.kind, candidate.mediaKind))
+        .filter((candidate) =>
+          item.kind === 'text'
+            ? candidate.source === 'parameter'
+            : candidate.source === 'input-port',
+        )
+        .sort((left, right) => left.slotIndex - right.slotIndex)[0];
+      if (!slot) continue;
+      operations.push({
+        parentId: source.id,
+        childId: target.id,
+        portIndex: slot.slotIndex,
+        sourcePortIndex: item.sourcePortIndex,
+        inputCount,
+        connectionMode: 'fisherai-workflow',
+        slotResource: {
+          kind: item.kind,
+          text: item.text,
+          url: item.url,
+        },
+      });
+      reserved.add(slot.slotIndex);
+    }
+    return operations;
+  };
   return {
     ...state,
     selectedConnection,
@@ -314,6 +375,28 @@ export function useCanvasConnections(hooks: Hooks, runtime: ConnectionRuntime) {
         if (id === value.hoveredNodeId) continue;
         const parentId = start.handle === 'right' ? id : value.hoveredNodeId;
         const childId = start.handle === 'right' ? value.hoveredNodeId : id;
+        const sourceNode = updated.find((node) => node.id === parentId);
+        const targetNode = updated.find((node) => node.id === childId);
+        if (sourceNode && targetNode) {
+          const bundleOperations = resolveBundleOperations(sourceNode, targetNode);
+          if (bundleOperations.length) {
+            let bundleUpdated = updated;
+            const applied: ConnectCanvasNodesOptions[] = [];
+            for (const bundleOperation of bundleOperations) {
+              const next = connectCanvasNodes(bundleUpdated, bundleOperation);
+              if (next !== bundleUpdated) {
+                bundleUpdated = next;
+                applied.push(bundleOperation);
+              }
+            }
+            if (applied.length) {
+              updated = bundleUpdated;
+              operations.push(...applied);
+              onConnected?.(parentId, childId);
+              continue;
+            }
+          }
+        }
         const preferred = start.handle === 'right' ? value.hoveredPortIndex : start.portIndex;
         const { operation, notice } = resolveOperation(updated, {
           parentId,
@@ -335,6 +418,7 @@ export function useCanvasConnections(hooks: Hooks, runtime: ConnectionRuntime) {
       if (operations.length)
         setNodes((latest) =>
           operations.reduce((result, intent) => {
+            if (intent.slotResource) return adapter.connect(result, intent);
             const { operation } = resolveOperation(result, intent);
             return operation ? adapter.connect(result, operation) : result;
           }, latest),

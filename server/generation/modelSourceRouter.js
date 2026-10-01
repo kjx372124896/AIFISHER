@@ -1,7 +1,7 @@
 /**
  * modelSourceRouter.js
  *
- * 设置页要按「站」分块渲染（AIFISHER API / RunningHub / 厂商直连），
+ * 设置页要按「站」分块渲染（RunningHub / 厂商直连），
  * 而站与模型的对应关系只存在于后端目录里——前端硬编一份必然漂移。
  *
  * 这里只回答「有哪些站、每站有哪些模型、每个密钥填没填」。
@@ -10,13 +10,11 @@
 
 import express from 'express';
 import { buildModelAvailability, buildSourceSettings } from './modelAvailability.js';
-import { createRelayPricingClient } from './relayPricing.js';
 
 export function createModelSourceRouter({
   catalog,
   readSecret = (key) => process.env[key],
   logger = console,
-  relayPricingClient = createRelayPricingClient({ logger }),
   getProviderConfiguration = async () => ({}),
 } = {}) {
   const router = express.Router();
@@ -67,15 +65,7 @@ export function createModelSourceRouter({
         && parsedInputImageCount <= 100
         ? parsedInputImageCount
         : null;
-      let relayPricing = null;
       const providerConfiguration = await getProviderConfiguration(request, { waitForFresh: false });
-      try {
-        relayPricing = await relayPricingClient.getSnapshot({ waitForFresh: false });
-      } catch (error) {
-        // 价格服务失效不该让整个模型下拉 500。下游会保留画布基准价，
-        // 同时明确标注“实时估价暂不可用”和“最终以任务账单为准”。
-        logger.warn?.('[ModelSource] 读取中转站实时价格失败：', error?.message || error);
-      }
       // This response contains per-user key availability. Never cache an old
       // unconfigured result after a provider key is saved.
       response.set('Cache-Control', 'no-store');
@@ -89,7 +79,6 @@ export function createModelSourceRouter({
         speed,
         generateAudio,
         inputImageCount,
-        relayPricing,
         providerConfiguration,
       }) });
     } catch (error) {

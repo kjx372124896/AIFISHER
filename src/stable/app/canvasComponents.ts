@@ -10,7 +10,6 @@ import { CanvasImageStudio } from '../dialogs/canvasImageStudio';
 import * as Workflow from '../local/canvasWorkflowGenerator';
 import * as BrandIcons from './modelBrandIcons';
 import { bind, bindRef } from './presentation';
-import { avatarClass, avatarColor, avatarText } from '../profile/canvasAvatar';
 import { nodeWidth, nodeHeight, nodePortX, nodePortY } from '../nodes/canvasNodeRules';
 import {
   IMAGE_MODELS,
@@ -22,7 +21,9 @@ import {
   VIDEO_ASPECT_RATIOS,
   VIDEO_RESOLUTIONS,
 } from '../../config/modelConfig';
+import { getDefaultModelName } from '../settings/defaultModelPreferences';
 import { version } from '../../../package.json';
+import { CanvasPluginNode } from '../plugins/canvasPluginNode';
 
 const versionInfo = { version };
 const agentModels = Dialogs.canvasAgentModels(TEXT_MODELS);
@@ -47,9 +48,6 @@ export const ProjectDashboard = bind(Dialogs.ProjectDashboard)(() => [
 export const Settings = bind(Dialogs.CanvasSettings)(() => [
   {
     CloseIcon: Icons.X,
-    avatarClass: avatarClass,
-    avatarText: avatarText,
-    avatarColor: avatarColor,
   },
 ]);
 export const Header = bind(Dialogs.CanvasHeader)(() => [
@@ -68,8 +66,6 @@ export const Sidebar = bind(Dialogs.CanvasSidebar)(() => [
     Workflow: Icons.Workflow,
     History: Icons.History,
     Settings: Icons.Wrench,
-    avatarClass: avatarClass,
-    avatarText: avatarText,
   },
 ]);
 export const Scene = bind(Dialogs.CanvasScene)(() => [
@@ -168,6 +164,7 @@ export const Node = React.memo(
       Workflow: WorkflowGenerator,
       MiniMax: MiniMaxNode,
       LegacyWorkflow: LegacyWorkflowNode,
+      Plugin: PluginNode,
     },
   ]),
   Dialogs.equalCanvasNodeProps,
@@ -275,7 +272,7 @@ export const TextCard = bind(Dialogs.CanvasTextCard)(() => [
     Frame: NodeFrame,
     Header: NodeHeader,
     Composer: TextComposer,
-    defaultModel: TEXT_MODELS[0]?.name || '豆包大语言2.0-mini',
+    defaultModel: getDefaultModelName('text', TEXT_MODELS) || '豆包大语言2.0-mini',
     nodeWidth: nodeWidth,
     nodeHeight: nodeHeight,
   },
@@ -328,6 +325,7 @@ export const MiniMaxNode = bind(Dialogs.CanvasMiniMaxNode)(() => [
 export const LegacyWorkflowNode = bind(Dialogs.CanvasLegacyWorkflowNode)(() => [
   { Frame: NodeFrame, Header: NodeHeader },
 ]);
+export const PluginNode = bind(CanvasPluginNode)(() => [{ Frame: NodeFrame }]);
 export const AgentMessage = bind(Dialogs.CanvasAgentMessage)(() => []);
 export const SaveDialog = bind(Dialogs.CanvasSaveDialog)(() => []);
 export const NodeFrame = bind(Dialogs.CanvasNodeFrame)(() => [

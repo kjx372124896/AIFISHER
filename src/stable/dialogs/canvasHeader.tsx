@@ -287,7 +287,6 @@ export function CanvasHeader(React: Runtime, props: Props, components: Component
           )}
         </div>
         <div className={'flex items-center gap-2 pointer-events-auto'}>
-          <div data-fisherai-account-center-slot={'true'} />
           <div
             className={
               'text-[10px] font-medium px-2 py-1 rounded-md border text-[var(--af-text-muted)] border-[var(--af-border)]'

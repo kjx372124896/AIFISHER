@@ -28,7 +28,8 @@ export interface MediaNodeSizingAdapter {
 }
 
 export function isResizableMediaNode(node: AdaptiveMediaNode): boolean {
-  return RESIZABLE_MEDIA_TYPES.has(String(node.type || ''));
+  const type = String(node.type || '');
+  return RESIZABLE_MEDIA_TYPES.has(type) || type.includes(':');
 }
 
 function positiveNumber(value: unknown): number | undefined {

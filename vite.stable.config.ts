@@ -73,6 +73,27 @@ function sourceOnlyBuild(): Plugin {
 
 export default defineConfig({
   base: '/',
+  server: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
+    watch: {
+      // Electron/Chromium 的运行态目录包含 Cookies、LOCK 等被进程长期占用的文件。
+      // 这些目录不是前端源码，若让 Vite/Chokidar 递归监听，在 Windows 上会触发 EBUSY。
+      ignored: [
+        '**/.desktop-dev/**',
+        '**/.desktop-package/**',
+        '**/.installer-test-localappdata/**',
+        '**/release/**',
+      ],
+    },
+    hmr: {
+      protocol: 'ws',
+      host: '127.0.0.1',
+      port: 5173,
+      clientPort: 5173,
+    },
+  },
   plugins: [react(), tailwindcss(), sourceOnlyBuild()],
   define: {
     __FISHERAI_BUILD__: JSON.stringify(buildStamp),

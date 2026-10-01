@@ -2,6 +2,8 @@ import type { CanvasNode } from '../nodes/canvasNodeOperations';
 import { resolveImageGenerationMode } from './imageMode';
 import { resolveVideoGenerationMode, type VideoModeDefinition } from './videoMode';
 import { resolveMidjourneyReferencePayload } from './midjourneyReferences';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
 
 export interface GenerationModel {
   name: string;
@@ -81,6 +83,16 @@ export function inputMedia(
       kind: output?.mediaKind ?? port?.mediaKind ?? 'unknown',
       url: output?.url,
       value: output?.value,
+    };
+  }
+  const pluginResource = getCanvasPluginNodeDefinition(source.type)?.resource?.(
+    toPluginNode(source as any),
+  );
+  if (pluginResource && pluginResource.kind !== 'bundle') {
+    return {
+      kind: pluginResource.kind,
+      url: pluginResource.url,
+      value: pluginResource.text,
     };
   }
   const type = source.type.toLowerCase();

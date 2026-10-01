@@ -1,6 +1,8 @@
 import type { CanvasNode } from '../nodes/canvasNodeOperations';
 import type { CanvasGroup } from './canvasGroups';
 import type { CanvasViewport } from './canvasNavigation';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
 
 /** Document projections are stable across viewport changes. */
 export function canvasSceneData(
@@ -92,9 +94,63 @@ export function canvasSceneData(
       continue;
     }
     const connectedImageNodes = (node.parentIds || [])
-      .flatMap<Record<string, unknown>>((id) => {
+      .flatMap<Record<string, unknown>>((id, slotIndex) => {
         const parent = byId.get(id);
         if (!parent) return [];
+        const storedResource =
+          node.workflowSlotResources &&
+          typeof node.workflowSlotResources === 'object' &&
+          !Array.isArray(node.workflowSlotResources)
+            ? (node.workflowSlotResources as Record<string, unknown>)[String(slotIndex)]
+            : undefined;
+        let resource =
+          storedResource && typeof storedResource === 'object' && !Array.isArray(storedResource)
+            ? (storedResource as { kind?: unknown; url?: unknown; text?: unknown })
+            : undefined;
+        if (!resource) {
+          const pluginResource = getCanvasPluginNodeDefinition(parent.type)?.resource?.(
+            toPluginNode(parent as any),
+          );
+          if (pluginResource?.kind === 'bundle') {
+            const sourcePortIndex = Math.max(
+              0,
+              Math.trunc(Number(node.sourcePortIndices?.[slotIndex]) || 0),
+            );
+            resource = pluginResource.items[sourcePortIndex];
+          } else if (pluginResource) resource = pluginResource;
+        }
+        if (resource?.kind) {
+          const kind = String(resource.kind);
+          const url = typeof resource.url === 'string' ? resource.url : '';
+          const text = typeof resource.text === 'string' ? resource.text : '';
+          return [
+            {
+              ...parent,
+              __workflowSlotIndex: slotIndex,
+              __workflowParentId: id,
+              url:
+                kind === 'text'
+                  ? 'text-node-placeholder'
+                  : kind === 'audio'
+                    ? 'audio-node-placeholder'
+                    : url,
+              resultUrl: kind === 'image' || kind === 'video' ? url : parent.resultUrl,
+              lastFrame: kind === 'video' ? url : parent.lastFrame,
+              textContent: kind === 'text' ? text : parent.textContent,
+              prompt: kind === 'text' ? text : parent.prompt,
+              type:
+                kind === 'image'
+                  ? 'Image'
+                  : kind === 'video'
+                    ? 'Video'
+                    : kind === 'audio'
+                      ? 'Audio'
+                      : kind === 'text'
+                        ? 'Text'
+                        : parent.type,
+            },
+          ];
+        }
         let url = parent.resultUrl || parent.dataUrl;
         if (['Video', 'Upload Video'].includes(parent.type)) url = parent.lastFrame || url;
         else if (parent.type === 'Text') url = 'text-node-placeholder';

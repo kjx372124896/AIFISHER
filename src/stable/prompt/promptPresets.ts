@@ -27,6 +27,11 @@ export type CreatePromptPresetInput = {
   previewBase64?: string | null;
 };
 
+export type UpdatePromptPresetInput = CreatePromptPresetInput & {
+  originalCategory: string;
+  originalTitle: string;
+};
+
 export type ParsedPromptTag = {
   label: string;
   prompt: string;
@@ -136,6 +141,20 @@ export function createPromptPresetClient(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
+        ...(signal ? {signal} : {}),
+      }).then((response) => readJson(response));
+    },
+    update(input: UpdatePromptPresetInput, signal?: AbortSignal): Promise<{ success: true; preset?: PromptPreset }> {
+      const route = [input.type, input.originalCategory, input.originalTitle].map(encodeURIComponent).join('/');
+      return fetcher(`/api/prompts/${route}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: input.category,
+          title: input.title,
+          prompt: input.prompt,
+          previewBase64: input.previewBase64,
+        }),
         ...(signal ? {signal} : {}),
       }).then((response) => readJson(response));
     },

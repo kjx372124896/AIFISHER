@@ -6,14 +6,6 @@ const PROJECT_COVER_IMAGE = /\.(?:avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)(?
 
 const resources = [
   {
-    href: 'https://api.work-fisher.com/',
-    label: 'AIFISHER',
-    description: 'API 与服务',
-    accessibleLabel: '打开 AIFISHER 服务',
-    image: '/aifisher-mark-white.svg',
-    imageClassName: 'fisherai-resource-link__mark',
-  },
-  {
     href: 'https://space.bilibili.com/17919458?spm_id_from=333.1007.0.0',
     label: 'Work-Fisher',
     description: '教程与案例',

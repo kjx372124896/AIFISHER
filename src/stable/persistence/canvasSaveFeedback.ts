@@ -16,7 +16,6 @@ interface Options {
   getNodes(): CoverNode[];
   getSelectedCoverId(): string | null | undefined;
   folderId?: string | null;
-  userNo?: string;
   saveWorkflow(
     cover: string | undefined,
     folderId: string | null | undefined,
@@ -69,7 +68,7 @@ export function useCanvasSaveFeedback(
     try {
       if (!isCurrent()) throw Error('画布已切换，忽略旧保存操作');
       const time = Date.now(),
-        by = `用户${current.userNo || '-'}`,
+        by = '本机',
         nodes = current.getNodes();
       const receipt = await current.saveWorkflow(
         projectCover(nodes, current.getSelectedCoverId()),

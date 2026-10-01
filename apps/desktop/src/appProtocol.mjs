@@ -151,7 +151,7 @@ export async function serveStatic(root, pathname) {
   });
 }
 
-export function createAppProtocolHandler({ backend, distDirectory, launcherDirectory, requestImpl }) {
+export function createAppProtocolHandler({ backend, distDirectory, requestImpl, devServerUrl = null }) {
   return async (request) => {
     const url = new URL(request.url);
     if (url.host !== APP_HOST) return notFound();
@@ -165,8 +165,25 @@ export function createAppProtocolHandler({ backend, distDirectory, launcherDirec
       const pipe = backend.pipePath();
       return pipe ? forwardToBackend(request, pipe, { requestImpl }) : reconnectingResponse();
     }
-    if (pathname === '/launcher' || pathname.startsWith('/launcher/')) {
-      return serveStatic(launcherDirectory, pathname.slice('/launcher'.length) || '/');
+    if (devServerUrl) {
+      try {
+        const target = new URL(`${url.pathname}${url.search}`, devServerUrl);
+        const headers = new Headers(request.headers);
+        headers.delete('host');
+        headers.delete('origin');
+        headers.delete('referer');
+        return await fetch(target, {
+          method: request.method,
+          headers,
+          body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+          duplex: request.body ? 'half' : undefined,
+        });
+      } catch {
+        return new Response('Vite dev server is unavailable', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
     }
     return serveStatic(distDirectory, pathname);
   };

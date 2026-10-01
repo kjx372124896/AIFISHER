@@ -7,7 +7,7 @@ import {
 } from './promptComponents';
 export function CanvasPresetCard(
   React: PromptRuntime,
-  { item, isSelected, onClick, onMouseEnter, onDelete }: PresetCardProps,
+  { item, isSelected, onClick, onMouseEnter, onEdit, onDelete }: PresetCardProps,
   { ImageIcon, DeleteIcon }: Pick<PromptIcons, 'ImageIcon' | 'DeleteIcon'>,
 ) {
   const videoRef = React.useRef<HTMLVideoElement>(null),
@@ -127,6 +127,21 @@ export function CanvasPresetCard(
           </span>
         </div>
       </button>
+      {!confirming && (
+        <button
+          aria-label={`编辑预设 ${item.title}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onEdit();
+          }}
+          className={
+            'absolute top-1.5 left-1.5 px-2 py-1 bg-[var(--af-surface)] hover:bg-[var(--af-info-bg)] rounded-lg opacity-0 group-hover:opacity-100 transition-all z-10 text-[10px] font-bold text-[var(--af-text-secondary)] hover:text-[var(--af-info)]'
+          }
+        >
+          {'编辑'}
+        </button>
+      )}
       {!confirming && (
         <button
           aria-label={`删除预设 ${item.title}`}

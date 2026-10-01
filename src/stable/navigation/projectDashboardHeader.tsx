@@ -1,7 +1,6 @@
 import type * as ReactTypes from 'react';
 import type { DashboardRuntime, DashboardIcon } from './dashboardRuntime';
 import type { DashboardFilter, DashboardSort, DashboardOrder } from './projectDashboardData';
-import { desktopBridge } from '../desktop/desktopBridge';
 export interface DashboardHeaderProps {
   viewMode: 'grid' | 'list';
   setViewMode(value: 'grid' | 'list'): void;
@@ -57,17 +56,6 @@ export function ProjectDashboardHeader(
     AddIcon,
     versionInfo,
   } = icons;
-  const desktop = desktopBridge();
-  const [switching, setSwitching] = React.useState(false);
-  const [workspaceError, setWorkspaceError] = React.useState('');
-  const switchWorkspace = async () => {
-    if (switching || document.documentElement.dataset.aifisherUpdateApplying === 'true') return;
-    setSwitching(true);
-    setWorkspaceError('');
-    try { await desktop?.switchWorkspace?.(); }
-    catch { setWorkspaceError('工作区未切换，原项目仍保留。'); }
-    finally { setSwitching(false); }
-  };
   const [menuOpen, setMenuOpen] = React.useState(false),
     menuRoot = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -129,7 +117,6 @@ export function ProjectDashboardHeader(
         </div>
       </div>
       <div className={'flex items-center gap-4'}>
-        <div data-fisherai-feedback-center-slot="true" />
         <div className={'relative group'}>
           <SearchIcon
             className={
@@ -308,13 +295,6 @@ export function ProjectDashboardHeader(
         >
           <FolderAddIcon size={20} />
         </button>
-        {desktop?.switchWorkspace && <button type="button" disabled={busy || switching}
-          onClick={() => void switchWorkspace()}
-          className="px-3 py-2 rounded-lg border border-[var(--af-border)] text-[var(--af-text-secondary)] disabled:opacity-50">
-          {switching ? '正在切换…' : '切换工作区'}
-        </button>}
-        {workspaceError && <span role="alert" className="text-xs text-[var(--af-danger)]">{workspaceError}</span>}
-
         <button
           onClick={onNewProject}
           className={

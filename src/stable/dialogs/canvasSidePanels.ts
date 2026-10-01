@@ -18,7 +18,6 @@ interface Props {
   onCloseWorkflowPresetPanel(): void;
   onWorkflowPresetSelect: unknown;
   isChatOpen: boolean;
-  localUserName?: string;
   onToggleChat(): void;
   onCloseChat(): void;
   isDraggingNodeToChat?: boolean;
@@ -78,7 +77,6 @@ export function CanvasSidePanels(runtime: Runtime, props: Props, components: Com
       key: props.documentEpoch ?? props.projectId ?? 'unsaved-project',
       isOpen: props.isChatOpen,
       onClose: props.onCloseChat,
-      userName: props.localUserName,
       isDraggingNode: props.isDraggingNodeToChat ?? props.isDraggingNode ?? false,
       panelWidth: props.chatPanelWidth,
       onResizeWidth: props.onChatPanelWidthChange,

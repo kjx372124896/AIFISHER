@@ -1,10 +1,49 @@
 {
-  "name": "@aifisher/desktop",
-  "version": "0.0.0",
+  "name": "aifisher-desktop",
+  "version": "2.0.7",
   "private": true,
-  "description": "AIFISHER single-window Electron shell (ADR-0035).",
+  "description": "AIFISHER Windows desktop application.",
   "main": "src/main.mjs",
+  "author": "AIFISHER",
   "devDependencies": {
     "electron": "44.3.0"
+  },
+  "build": {
+    "appId": "com.aifisher.desktop",
+    "productName": "AIFISHER",
+    "asar": true,
+    "npmRebuild": false,
+    "electronDist": "node_modules/electron/dist",
+    "afterPack": "build/afterPack.cjs",
+    "directories": {
+      "output": "../../release/windows"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../.desktop-package/app",
+        "to": "app",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [{"target": "nsis", "arch": ["x64"]}],
+      "icon": "../../public/aifisher-app.ico",
+      "artifactName": "AIFISHER-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AIFISHER",
+      "uninstallDisplayName": "AIFISHER",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

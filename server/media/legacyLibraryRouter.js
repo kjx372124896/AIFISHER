@@ -469,19 +469,26 @@ router.post('/api/library', async (req, res) => {
     try {
         const { sourceUrl, name, category, meta, ownership = '' } = req.body;
         if (typeof name !== 'string' || !name.trim() || name.trim().length > 200
-            || typeof category !== 'string' || !category.trim() || category.trim().length > 80
+            || typeof category !== 'string' || !category.trim() || category.trim().length > 240
             || typeof ownership !== 'string' || ownership.trim().length > 120) {
             return res.status(400).json({ error: '名称、分类或归属格式不正确' });
         }
         const normalizedName = String(name || '').trim();
-        const normalizedCategory = sanitizeAssetFileName(category);
+        const normalizedCategory = String(category || '')
+            .replace(/\\\\/g, '/')
+            .split('/')
+            .map(part => sanitizeAssetFileName(part))
+            .filter(Boolean)
+            .join('/');
+        const storageCategory = normalizedCategory.split('/')[0];
 
-        if (!sourceUrl || !normalizedName || !normalizedCategory) {
+        if (!sourceUrl || !normalizedName || !normalizedCategory || !storageCategory) {
             return res.status(400).json({ error: "Missing required fields" });
         }
 
-        // Determine destination directory
-        const destDir = path.join(LIBRARY_ASSETS_DIR, normalizedCategory);
+        // Keep media files in the existing top-level category directory for backward compatibility;
+        // the full nested path is stored in metadata.category and drives the asset-library UI.
+        const destDir = path.join(LIBRARY_ASSETS_DIR, storageCategory);
         if (!fs.existsSync(destDir)) {
             fs.mkdirSync(destDir, { recursive: true });
         }
@@ -573,7 +580,7 @@ router.post('/api/library', async (req, res) => {
         };
 
         writeLibraryAssetMeta(destDir, assetId, metadata);
-        const relativePath = path.join(normalizedCategory, destFilename);
+        const relativePath = path.join(storageCategory, destFilename);
         const newEntry = buildLibraryAssetEntry(relativePath, {
             category: normalizedCategory,
             type: assetType,

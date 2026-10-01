@@ -65,9 +65,7 @@ export function classifyGenerationError(error) {
       code: 'PROVIDER_CREDENTIAL_MISSING',
       status: 400,
       retryable: false,
-      message: error?.credentialSource === 'aifisher_relay'
-        ? '尚未配置 AIFISHER API Key。请打开画布右上角「余额与活动」，填写自己的密钥并点击「保存 Key」，再手动生成。'
-        : '尚未配置当前模型服务的密钥。请到「设置」中连接对应服务并保存自己的密钥，再手动生成。',
+      message: '尚未配置当前模型服务的密钥。请到「设置」中连接对应服务并保存自己的密钥，再手动生成。',
     };
   }
   if (

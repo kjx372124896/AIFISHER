@@ -35,7 +35,6 @@ export const USER_PROVIDER_SECRET_KEYS = Object.freeze([
   'FAL_API_KEY',
   'ALIYUN_API_KEY',
   'MUREKA_API_KEY',
-  'RELAY_API_KEY',
   'RUNNINGHUB_API_KEY',
   'RUNNINGHUB_GLOBAL_API_KEY',
   'RUNNINGHUB_IMAGE_ACCESS_PASSWORD',
@@ -44,12 +43,6 @@ export const USER_PROVIDER_SECRET_KEYS = Object.freeze([
   'TOS_SECRET_KEY',
 ]);
 const SECRET_KEYS = new Set(USER_PROVIDER_SECRET_KEYS);
-
-// 「AIFISHER API」的独立配置。与官方各家、RunningHub 三者互不影响，
-// 全 ASCII 键名、按来源前缀命名空间。
-const RELAY_KEYS = [
-  'RELAY_BASE_URL',
-];
 
 const RUNNINGHUB_KEYS = [
   'RUNNINGHUB_BASE_URL',
@@ -104,7 +97,6 @@ const LOCAL_ONLY_DISABLED_KEYS = new Set(['SERVER_IP', 'COLLAB_HOST']);
 const KNOWN_KEYS = new Set([
   ...SECRET_KEYS,
   ...RUNNINGHUB_KEYS,
-  ...RELAY_KEYS,
   'TOS_BUCKET',
   'TOS_REGION',
   'TOS_ENDPOINT',

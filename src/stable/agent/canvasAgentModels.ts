@@ -4,7 +4,6 @@ const CHAT_PROVIDERS = new Set([
   'DeepSeekProvider',
   'GlmTextProvider',
   'KimiTextProvider',
-  'RelayTextProvider',
 ]);
 interface CatalogModel<Parameter> {
   name: string;
@@ -28,7 +27,7 @@ export function canvasAgentModels<Parameter>(catalog: readonly CatalogModel<Para
       id: model.name,
       label: model.name,
       vision: (model.supportedReferenceTypes?.includes('image') ? 'supported'
-        : model.provider !== 'RelayTextProvider' && model.supportedReferenceTypes?.includes('text')
+        : model.supportedReferenceTypes?.includes('text')
           ? 'unsupported' : 'unknown') as AgentVision,
       advancedParams: model.advancedParams || [],
     }))

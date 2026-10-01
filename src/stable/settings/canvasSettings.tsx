@@ -5,14 +5,15 @@ import type * as ReactTypes from 'react';
 import { activateModal } from '../design/modalFocus';
 import { mountSourceSettings } from '../generation/sourceSettings';
 import { createSourceSettingsClient } from '../generation/sourceSettingsClient';
+import { mountProviderFrameworkSettings } from '../generation/providerFrameworkSettings';
 import { mountLocalRuntimeSettings } from '../local/localRuntimeSettings';
 import { createLocalRuntimeClient } from '../local/localRuntimeClient';
 import { mountMediaDownloadSettings } from '../media/mediaDownloadSettings';
 import { installMediaDownloadFileName } from '../media/mediaDownloadFileName';
-import { installLocalProfile } from '../profile/localProfile';
-import { applyStoredAvatar } from '../profile/localProfile';
 import { mountLocalUpdateSettings } from '../update/localUpdateSettings';
 import { CanvasAppearanceSettings } from '../appearance/CanvasAppearanceSettings';
+import { mountCanvasPluginManager } from '../plugins/canvasPluginManager';
+import { CanvasDefaultModelSettings } from './CanvasDefaultModelSettings';
 
 type Runtime = Pick<
   typeof ReactTypes,
@@ -21,22 +22,17 @@ type Runtime = Pick<
 export interface CanvasSettingsProps {
   isOpen: boolean;
   onClose: () => void;
-  localUserName?: string;
-  setLocalUserName?: (value: string) => void;
-  localUserId?: string;
-  localUserNo?: string;
 }
 interface Dependencies {
   CloseIcon: CanvasComponent;
-  avatarClass: (name: string, size: number) => string;
-  avatarText: (name: string) => string;
-  avatarColor: (id: string) => string;
 }
 const sections = [
-  ['profile', '个人设置'],
   ['appearance', '画布外观'],
+  ['default-models', '默认模型'],
   ['local-service', '开源服务'],
   ['models', '闭源服务'],
+  ['custom-providers', '自定义供应商'],
+  ['plugins', '画布插件'],
   ['storage', '存储'],
   ['diagnostics', '关于 AIFISHER 画布'],
 ] as const;
@@ -48,18 +44,15 @@ export function CanvasSettings(
   props: CanvasSettingsProps,
   dependencies: Dependencies,
 ) {
-  const [section, setSection] = React.useState<Section>('profile');
-  const [message, setMessage] = React.useState('');
+  const [section, setSection] = React.useState<Section>('appearance');
   const dialogRef = React.useRef<HTMLDivElement>(null),
     hostRef = React.useRef<HTMLDivElement>(null);
-  const closeRef = React.useRef(props.onClose),
-    avatarReadRef = React.useRef<AbortController | null>(null);
+  const closeRef = React.useRef(props.onClose);
   const pageDisposeRef = React.useRef<(() => void) | null>(null);
   React.useLayoutEffect(() => {
     closeRef.current = props.onClose;
   });
   const close = () => {
-    avatarReadRef.current?.abort();
     pageDisposeRef.current?.();
     pageDisposeRef.current = null;
     closeRef.current();
@@ -68,15 +61,12 @@ export function CanvasSettings(
     if (!props.isOpen) return;
     const release = dialogRef.current
       ? activateModal(dialogRef.current, () => {
-          avatarReadRef.current?.abort();
           pageDisposeRef.current?.();
           pageDisposeRef.current = null;
           closeRef.current();
         })
       : () => {};
-    installLocalProfile();
     return () => {
-      avatarReadRef.current?.abort();
       pageDisposeRef.current?.();
       pageDisposeRef.current = null;
       release();
@@ -85,14 +75,16 @@ export function CanvasSettings(
   React.useEffect(() => {
     if (!props.isOpen) return;
     const host = hostRef.current;
-    setMessage('');
-    applyStoredAvatar();
     if (host) {
       if (section === 'diagnostics') pageDisposeRef.current = mountLocalUpdateSettings(host);
       else if (section === 'models')
         pageDisposeRef.current = mountSourceSettings(host, createSourceSettingsClient());
+      else if (section === 'custom-providers')
+        pageDisposeRef.current = mountProviderFrameworkSettings(host);
       else if (section === 'storage')
         pageDisposeRef.current = mountMediaDownloadSettings(host, installMediaDownloadFileName());
+      else if (section === 'plugins')
+        pageDisposeRef.current = mountCanvasPluginManager(host);
       else if (section === 'local-service')
         pageDisposeRef.current = mountLocalRuntimeSettings(
           host,
@@ -100,37 +92,18 @@ export function CanvasSettings(
         );
     }
     return () => {
-      avatarReadRef.current?.abort();
       pageDisposeRef.current?.();
       pageDisposeRef.current = null;
     };
   }, [props.isOpen, section]);
-  React.useEffect(() => {
-    if (props.isOpen) applyStoredAvatar();
-  }, [props.isOpen, props.localUserName, section]);
   if (!props.isOpen) return null;
-  const name = props.localUserName || '协作者',
-    { CloseIcon } = dependencies;
+  const { CloseIcon } = dependencies;
   const build = document.documentElement.dataset.fisheraiBuild || '';
   const select = (next: Section) => {
     if (next === section) return;
-    avatarReadRef.current?.abort();
     pageDisposeRef.current?.();
     pageDisposeRef.current = null;
     setSection(next);
-  };
-  const upload = async (file: File) => {
-    avatarReadRef.current?.abort();
-    const controller = new AbortController();
-    avatarReadRef.current = controller;
-    setMessage('正在读取头像…');
-    try {
-      await installLocalProfile().setAvatarFile(file, { signal: controller.signal });
-      if (!controller.signal.aborted) setMessage('头像已更新。');
-    } catch (error) {
-      if (!controller.signal.aborted)
-        setMessage(error instanceof Error ? error.message : '头像读取失败。');
-    }
   };
   return (
     <div
@@ -142,7 +115,7 @@ export function CanvasSettings(
         ref={dialogRef}
         data-fisherai-settings="true"
         data-fisherai-settings-owned="true"
-        data-fisherai-settings-domains="appearance models storage local-service network diagnostics"
+        data-fisherai-settings-domains="appearance default-models models custom-providers plugins storage local-service network diagnostics"
         role="dialog"
         aria-label="AIFISHER 画布设置"
         aria-modal="true"
@@ -233,82 +206,10 @@ export function CanvasSettings(
             id={`fisher-settings-page-${section}`}
             aria-labelledby={`fisher-settings-tab-${section}`}
           >
-            {section === 'profile' ? (
-              <div className="p-8 bg-[var(--af-surface-raised)] border border-[var(--af-border)] rounded-lg space-y-8">
-                <div>
-                  <h3 className="text-xl font-bold text-[var(--af-text)] mb-2">个人资料</h3>
-                  <p className="text-sm text-[var(--af-text-secondary)]">
-                    设置画布中显示的名称与头像。
-                  </p>
-                </div>
-                <div className="space-y-6 max-w-xl">
-                  <div className="flex items-center gap-6">
-                    <span className="w-24 shrink-0 text-base font-medium text-[var(--af-text-secondary)]">
-                      当前头像
-                    </span>
-                    <div className="flex items-center gap-4">
-                      <div
-                        data-fisherai-profile-avatar="local"
-                        className={`w-16 h-16 rounded-full flex items-center justify-center text-[var(--af-media-text)] [text-shadow:0_1px_2px_var(--af-media-bg),0_0_2px_var(--af-media-bg)] data-[has-custom-avatar=true]:[text-shadow:none] font-bold border-2 border-[var(--af-border-control)] ${dependencies.avatarClass(name, 64)}`}
-                        style={{
-                          background: dependencies.avatarColor(
-                            props.localUserId || props.localUserNo || '1',
-                          ),
-                        }}
-                      >
-                        {dependencies.avatarText(name)}
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs text-[var(--af-text-muted)]">
-                          支持 PNG、JPEG、WebP，最大 2 MB；未上传时使用姓名首字母。
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <label className="cursor-pointer rounded-md border border-[var(--af-border-control)] bg-[var(--af-input)] px-3 py-1.5 text-xs text-[var(--af-text)]">
-                            上传头像
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp"
-                              className="hidden"
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                event.target.value = '';
-                                if (file) void upload(file);
-                              }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="rounded-md px-3 py-1.5 text-xs text-[var(--af-text-muted)]"
-                            onClick={() => {
-                              avatarReadRef.current?.abort();
-                              installLocalProfile().clearAvatar();
-                              setMessage('已恢复默认头像。');
-                            }}
-                          >
-                            恢复默认
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-6">
-                    <span className="w-24 shrink-0 text-base font-medium text-[var(--af-text-secondary)]">
-                      用户名称
-                    </span>
-                    <input
-                      value={props.localUserName || ''}
-                      onChange={(event) => props.setLocalUserName?.(event.target.value)}
-                      placeholder="输入您的显示名称"
-                      className="flex-1 min-w-0 bg-[var(--af-surface-raised)] border border-[var(--af-border)] rounded-lg px-4 py-2.5 text-base text-[var(--af-text)]"
-                    />
-                  </label>
-                  <p role="status" className="text-sm text-[var(--af-text-secondary)]">
-                    {message}
-                  </p>
-                </div>
-              </div>
-            ) : section === 'appearance' ? (
+            {section === 'appearance' ? (
               <CanvasAppearanceSettings />
+            ) : section === 'default-models' ? (
+              <CanvasDefaultModelSettings />
             ) : section === 'diagnostics' ? (
               <div className="p-8 bg-[var(--af-surface-raised)] border border-[var(--af-border)] rounded-lg space-y-6">
                 <div ref={hostRef} />

@@ -28,7 +28,6 @@ const AGENT_TEXT_PROVIDERS = new Set([
   'DeepSeekProvider',
   'GlmTextProvider',
   'KimiTextProvider',
-  'RelayTextProvider',
 ]);
 const REQUIRED_SECRETS_BY_PROVIDER = new Map(
   GENERATION_PROVIDER_CONTRACTS.map((contract) => [contract.name, contract.requiredSecrets]),
@@ -151,7 +150,6 @@ function normalizeCredentials(getCredentials) {
     DEEPSEEK_API_KEY: String(credentials.DEEPSEEK_API_KEY || credentials.deepSeekApiKey || '').trim(),
     ZHIPU_API_KEY: String(credentials.ZHIPU_API_KEY || credentials.zhipuApiKey || '').trim(),
     MOONSHOT_API_KEY: String(credentials.MOONSHOT_API_KEY || credentials.moonshotApiKey || '').trim(),
-    RELAY_API_KEY: String(credentials.RELAY_API_KEY || credentials.relayApiKey || '').trim(),
     LOGS_DIR: String(credentials.LOGS_DIR || credentials.logsDirectory || '').trim(),
   };
 }
@@ -229,6 +227,7 @@ async function generateWithCurrentAgent(request) {
     const result = await provider.generateText({
       nodeId: `agent-${crypto.randomUUID()}`,
       projectId: 'agent',
+      modelConfig: request.modelConfig,
       prompt,
       textModel: endpoint.model,
       url: endpoint.url,

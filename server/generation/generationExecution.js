@@ -9,13 +9,6 @@ const PROVIDER_METHODS = Object.freeze({
   text: 'generateText',
 });
 
-const RELAY_VISUAL_PROVIDERS = new Set([
-  'RelayImageProvider',
-  'RelayMidjourneyProvider',
-  'RelayVideoProvider',
-]);
-const MINIMUM_RELAY_VISUAL_PROMPT_LENGTH = 5;
-
 export class GenerationTaskError extends Error {
   constructor(details) {
     super(details.message);
@@ -75,19 +68,6 @@ export async function executeGenerationTask({
       message: `当前模型不支持${kind || '此类'}生成。`,
     });
   }
-  const promptLength = [...String(request?.prompt || '').trim()].length;
-  if (
-    RELAY_VISUAL_PROVIDERS.has(providerName)
-    && promptLength < MINIMUM_RELAY_VISUAL_PROMPT_LENGTH
-  ) {
-    throw new GenerationTaskError({
-      code: 'PROMPT_TOO_SHORT',
-      status: 400,
-      retryable: false,
-      message: `字数不够，请至少输入 ${MINIMUM_RELAY_VISUAL_PROMPT_LENGTH} 个字。`,
-    });
-  }
-
   const lease = coordinator.begin({
     nodeId,
     attemptId: request.generationAttemptId,
@@ -154,10 +134,6 @@ export async function executeGenerationTask({
             const remoteTask = sanitizeRemoteTaskReference(reference);
             if (!remoteTask || providerName !== remoteTask.providerName || !isRecoverableProvider(kind, providerName)) return;
             if (!coordinator.recordRemoteTask(lease.nodeId, lease.attemptId, remoteTask, slot)) throw createCancelledError();
-          },
-          generationTaskSubmissionRejected(slot) {
-            if (kind !== 'image' || providerName !== 'RelayImageProvider') return;
-            coordinator.recordRejectedSubmission(lease.nodeId, lease.attemptId, slot);
           },
         }),
       ),

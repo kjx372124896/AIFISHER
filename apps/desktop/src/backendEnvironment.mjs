@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { releasePaths } from './installation.mjs';
 
 const OPAQUE_USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
-// Values meant for other launchers or for a pending update handover, never for the backend.
+// Values meant for a pending update handover or unrelated parent processes, never for the backend.
 const FOREIGN_VARIABLES = [
   'COLLAB_PORT',
   'VITE_COLLAB_PORT',
@@ -30,7 +30,6 @@ export async function loadReleaseHelpers(toolsDirectory) {
   ]);
   return {
     providerSecretKeys: runtime.USER_PROVIDER_SECRET_KEYS,
-    loadIdentityConfiguration: runtime.loadPackagedIdentityRuntimeConfiguration,
     loadProductVersion: runtime.loadPackagedProductVersion,
     credentialFileName: credentials.PROVIDER_CREDENTIAL_FILE_NAME,
     createCredentialStore: ({ filePath, helperPath }) =>
@@ -85,14 +84,7 @@ async function writeTextAtomic(file, contents) {
   }
 }
 
-export async function readIdentityIssuer({ installation, helpers }) {
-  const values = await helpers.loadIdentityConfiguration(releasePaths(installation), {
-    required: installation.packaged,
-  });
-  return values.AIFISHER_ACCESS_TOKEN_ISSUER ?? null;
-}
-
-// Mirrors runtimeControl's start environment, plus the pipe and the Identity origin.
+// Mirrors runtimeControl's local start environment, plus the desktop pipe.
 export async function createBackendEnvironment({
   installation,
   userId,
@@ -114,7 +106,6 @@ export async function createBackendEnvironment({
   const environment = {
     ...baseEnvironment,
     ...parseEnvironment(await readText(installation.envFile)),
-    ...(await helpers.loadIdentityConfiguration(paths, { required: installation.packaged })),
     AIFISHER_PRODUCT_VERSION: await helpers.loadProductVersion(paths),
   };
   for (const key of FOREIGN_VARIABLES) delete environment[key];
@@ -154,9 +145,5 @@ export async function createBackendEnvironment({
     FISHERAI_PROVIDER_CREDENTIAL_HELPER: installation.providerCredentialHelper,
     AIFISHER_ACTIVE_USER_ID: userId,
     AIFISHER_BACKEND_PIPE: pipe,
-  });
-  if (environment.AIFISHER_ACCESS_TOKEN_ISSUER) {
-    environment.AIFISHER_IDENTITY_ORIGIN = environment.AIFISHER_ACCESS_TOKEN_ISSUER;
-  }
-  return environment;
+  });  return environment;
 }

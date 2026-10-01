@@ -192,16 +192,16 @@ export function CanvasSaveDialog(React: Runtime, props: CanvasSaveDialogProps) {
                       htmlFor={`${idRef.current}-category`}
                       className="text-sm font-medium text-[var(--af-text)]"
                     >
-                      {categoryLabel} <span className="text-[var(--af-danger)]">*</span>
+                      保存目录 <span className="text-[var(--af-danger)]">*</span>
                     </label>
                     <input
                       id={`${idRef.current}-category`}
                       className={fieldClass}
                       value={category}
                       onChange={(event) => setCategory(event.target.value)}
-                      maxLength={80}
+                      maxLength={240}
                       disabled={busy}
-                      placeholder="选择分类，也可以自行填写"
+                      placeholder="选择角色/现代角色等目录，也可以直接填写"
                     />
                     <select aria-label="选择已有分类" className={fieldClass} disabled={busy}
                       value={props.categories.includes(category) ? category : ''}

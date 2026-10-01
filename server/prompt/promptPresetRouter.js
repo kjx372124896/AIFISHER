@@ -328,6 +328,102 @@ export function createPromptPresetRouter({ libraryDirectory, logger = console })
     }
   });
 
+  router.put('/api/prompts/:type/:category/:title', async (request, response) => {
+    try {
+      const type = normalizeType(request.params.type);
+      const originalCategory = normalizeText(request.params.category, '预设分类', 80);
+      const originalTitle = normalizeText(request.params.title, '预设名称', 120);
+      const category = normalizeText(request.body?.category, '预设分类', 80);
+      const title = normalizeText(request.body?.title, '预设名称', 120);
+      const promptText = normalizeText(request.body?.prompt, '提示词内容', 20000);
+      assertTagSafe(title, promptText);
+      const preview = normalizePreview(request.body?.previewBase64);
+      const preset = {
+        title,
+        prompt: promptText.includes('\n') ? promptText.split('\n') : promptText,
+        preview: '',
+      };
+      let stalePreview = '';
+      let shouldRemoveStalePreview = false;
+      await mutate(async () => {
+        const data = await readConfig();
+        if (!Array.isArray(data[type])) {
+          throw new PromptPresetError('预设类型不存在', 404, 'PROMPT_PRESET_NOT_FOUND');
+        }
+        const sourceCategory = data[type].find((item) => item?.name === originalCategory);
+        if (!sourceCategory || !Array.isArray(sourceCategory.items)) {
+          throw new PromptPresetError('预设分类不存在', 404, 'PROMPT_PRESET_NOT_FOUND');
+        }
+        const sourceIndex = sourceCategory.items.findIndex((item) => item?.title === originalTitle);
+        if (sourceIndex < 0) {
+          throw new PromptPresetError('预设不存在', 404, 'PROMPT_PRESET_NOT_FOUND');
+        }
+        const duplicate = data[type].some((categoryItem) =>
+          Array.isArray(categoryItem?.items) && categoryItem.items.some((item) =>
+            item !== sourceCategory.items[sourceIndex]
+            && String(item?.title || '').trim().toLocaleLowerCase() === title.toLocaleLowerCase()),
+        );
+        if (duplicate) {
+          throw new PromptPresetError(
+            '同类型下已存在相同名称的预设',
+            409,
+            'PROMPT_PRESET_EXISTS',
+          );
+        }
+
+        const previous = sourceCategory.items[sourceIndex];
+        preset.preview = typeof previous?.preview === 'string' ? previous.preview : '';
+        let previewPath = null;
+        try {
+          if (preview) {
+            const filename = `${crypto.randomUUID()}.${preview.extension}`;
+            previewPath = path.join(libraryDirectory, 'prompts', 'previews', filename);
+            await mkdir(path.dirname(previewPath), { recursive: true });
+            await writeFile(previewPath, preview.buffer);
+            stalePreview = preset.preview;
+            preset.preview = `/library/prompts/previews/${filename}`;
+          }
+
+          sourceCategory.items.splice(sourceIndex, 1);
+          let targetCategory = data[type].find((item) => item?.name === category);
+          if (!targetCategory) {
+            targetCategory = { name: category, items: [] };
+            data[type].push(targetCategory);
+          }
+          if (!Array.isArray(targetCategory.items)) {
+            throw new PromptPresetError(
+              '预设分类数据格式无效',
+              500,
+              'INVALID_PROMPT_PRESET_CONFIG',
+            );
+          }
+          targetCategory.items.push(preset);
+          if (sourceCategory.items.length === 0 && sourceCategory !== targetCategory) {
+            data[type] = data[type].filter((item) => item !== sourceCategory);
+          }
+          shouldRemoveStalePreview = Boolean(stalePreview) && !isPreviewReferenced(data, stalePreview);
+          await writeJsonAtomic(configPath, data);
+        } catch (error) {
+          if (previewPath) await rm(previewPath, { force: true });
+          throw error;
+        }
+      });
+      if (shouldRemoveStalePreview) {
+        const previewPath = localPreviewPath(libraryDirectory, stalePreview);
+        if (previewPath) {
+          try {
+            await rm(previewPath, { force: true });
+          } catch (error) {
+            logger.warn('Prompt preset preview cleanup failed:', error);
+          }
+        }
+      }
+      response.json({ success: true, preset });
+    } catch (error) {
+      sendError(response, error, logger);
+    }
+  });
+
   router.delete('/api/prompts/:type/:category/:title', async (request, response) => {
     try {
       const type = normalizeType(request.params.type);

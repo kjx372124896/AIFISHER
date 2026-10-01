@@ -1,5 +1,6 @@
 import type * as ReactTypes from 'react';
 import type { CanvasContextMenuState } from '../canvas/canvasContextActions';
+import { listCanvasPluginNodeDefinitions } from '../plugins/canvasPluginRegistry';
 type Runtime = Pick<
   typeof ReactTypes,
   'createElement' | 'Fragment' | 'useState' | 'useRef' | 'useEffect' | 'useLayoutEffect'
@@ -62,6 +63,7 @@ export function CanvasContextMenu(
   const menuRef = React.useRef<HTMLDivElement>(null),
     fileRef = React.useRef<HTMLInputElement>(null);
   const [mode, setMode] = React.useState<'main' | 'add-nodes'>('main');
+  const [, setPluginRevision] = React.useState(0);
   const [position, setPosition] = React.useState({ x: state.x, y: state.y });
   React.useEffect(() => {
     if (!state.isOpen) return;
@@ -74,6 +76,11 @@ export function CanvasContextMenu(
   React.useEffect(() => {
     if (state.isOpen) setMode('main');
   }, [state.isOpen, state.type, state.x, state.y]);
+  React.useEffect(() => {
+    const refresh = () => setPluginRevision((value) => value + 1);
+    window.addEventListener('fisherai:canvas-plugins-changed', refresh);
+    return () => window.removeEventListener('fisherai:canvas-plugins-changed', refresh);
+  }, []);
   React.useLayoutEffect(() => {
     if (!state.isOpen || !menuRef.current) return;
     const place = () => {
@@ -150,6 +157,9 @@ export function CanvasContextMenu(
   const nodeOptions = state.type === 'node-options';
   const global = state.type === 'global' && mode === 'main';
   const connector = state.type === 'node-connector';
+  const pluginNodes = listCanvasPluginNodeDefinitions()
+    .map((entry) => entry.definition)
+    .filter((definition) => definition.showInCreateMenu !== false);
   const keyDown = (event: ReactTypes.KeyboardEvent) => {
     event.stopPropagation();
     if (event.key === 'Tab') {
@@ -360,6 +370,18 @@ export function CanvasContextMenu(
                 action: () => props.onSelectType('Image Composite'),
               },
               true,
+            )}
+            {pluginNodes.length > 0 && separator('plugins')}
+            {pluginNodes.map((definition) =>
+              item(
+                {
+                  label: `${typeof definition.icon === 'string' ? `${definition.icon} ` : ''}${definition.title}`,
+                  icon: 'add',
+                  description: definition.description,
+                  action: () => props.onSelectType(definition.type),
+                },
+                true,
+              ),
             )}
           </>
         )}

@@ -163,6 +163,7 @@ const PROVIDERS = {
 
                 const executionPromise = fn({ 
                     ...params, 
+                    modelConfig: config,
                     // 确保透传解析后的物理模型 ID 到对应的参数字段
                     imageModel: params.imageModel ? finalModelId : params.imageModel,
                     videoModel: params.videoModel ? finalModelId : params.videoModel,

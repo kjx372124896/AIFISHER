@@ -23,8 +23,6 @@ export type SourceMedia = { kind: MediaKind; models: SourceModel[] };
 export type SourceBlock = {
   source: string;
   label: string;
-  /** 真表示密钥由当前 AIFISHER 账号在 Identity 统一管理，前端不再重复输入。 */
-  accountManaged?: boolean;
   /** 只有键名和「填没填」，密钥值永远不离开后端。 */
   secrets: SourceSecret[];
   /** 真表示一个密钥点亮全站，界面只画一个输入框。 */
@@ -187,6 +185,7 @@ export function createSourceSettingsClient(
   const clearModelGroups = () => {
     modelGroupsByQuery.clear();
   };
+  globalThis.addEventListener?.('fisherai:model-sources-changed', clearModelGroups as EventListener);
 
   return {
     async getBlocks(options: SettingsRequestOptions = {}): Promise<SourceBlock[]> {

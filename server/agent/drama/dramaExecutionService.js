@@ -251,7 +251,7 @@ export function createDramaExecutionService({
     const modelName = OFFICIAL_DRAMA_BUNDLE.scenes.model;
     const model = modelCatalog()[modelName];
     const endpoint = model?.endpoint?.['text-to-image'];
-    if (!model || model.provider !== 'RelayImageProvider' || model.source !== 'relay' || !endpoint?.url || !endpoint.model) {
+    if (!model || model.provider !== 'DreaminaCliImageProvider' || model.source !== 'dreamina_cli' || !endpoint?.url || !endpoint.model) {
       throw new DramaExecutionError('即梦 5 官方组合线路不可用', 'DRAMA_MODEL_UNAVAILABLE');
     }
     const asset = record.snapshot;

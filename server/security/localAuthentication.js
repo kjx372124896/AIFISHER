@@ -75,20 +75,17 @@ export function createExactLocalBoundary({ trustedOrigins }) {
 }
 
 /**
- * Every request that reaches the backend comes from the active user's own desktop window,
- * so the request context is fixed at startup: the user chosen by the main process, that
- * user's directories, and a way to ask the main process for a current Identity token.
+ * Every request that reaches the backend comes from the local desktop window, so the request
+ * context is fixed at startup: one local workspace id and its isolated directories.
  */
 export function createActiveUserContext({
   activeOpaqueUserId,
   userScopeResolver,
-  getAccessToken,
   clock = () => new Date(),
 } = {}) {
   if (typeof userScopeResolver?.ensureDirectories !== 'function') {
     throw new Error('User-scope resolver is missing');
   }
-  if (typeof getAccessToken !== 'function') throw new Error('Access-token provider is missing');
   const issuedAt = Math.floor(clock().getTime() / 1_000);
   const identity = Object.freeze({
     opaqueUserId: activeOpaqueUserId,
@@ -98,19 +95,11 @@ export function createActiveUserContext({
     expiresAt: issuedAt + ACTIVE_USER_CONTEXT_TTL_SECONDS,
   });
   const scope = userScopeResolver.ensureDirectories(createActiveUserAuthenticationContext(identity));
-  async function readAccessToken() {
-    try {
-      const token = await getAccessToken();
-      return typeof token === 'string' && token ? token : null;
-    } catch {
-      return null;
-    }
-  }
-  return Object.freeze({ identity, scope, getAccessToken: readAccessToken });
+  return Object.freeze({ identity, scope });
 }
 
 export function attachActiveUserContext(context) {
-  if (!context?.identity || !context?.scope || typeof context.getAccessToken !== 'function') {
+  if (!context?.identity || !context?.scope) {
     throw new Error('Active-user context is invalid');
   }
   return (request, _response, next) => {

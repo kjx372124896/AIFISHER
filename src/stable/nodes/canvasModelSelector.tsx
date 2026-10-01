@@ -83,11 +83,14 @@ export function CanvasModelSelector(React: Runtime, props: Props, { ModelIcon }:
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     const sourcesChanged = () => setAttempt((value) => value + 1);
+    const catalogChanged = () => setAttempt((value) => value + 1);
     document.addEventListener('mousedown', outside);
     window.addEventListener('fisherai:model-sources-changed', sourcesChanged);
+    window.addEventListener('fisherai:model-catalog-changed', catalogChanged);
     return () => {
       document.removeEventListener('mousedown', outside);
       window.removeEventListener('fisherai:model-sources-changed', sourcesChanged);
+      window.removeEventListener('fisherai:model-catalog-changed', catalogChanged);
     };
   }, [open]);
   React.useEffect(() => {

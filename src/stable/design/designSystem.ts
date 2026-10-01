@@ -913,7 +913,6 @@ function enhanceSettings(root: ParentNode): string[] {
     }
   }
   const mapping: Record<string, string> = {
-    个人设置: 'profile',
     密钥配置: 'models',
     闭源服务: 'models',
     本机服务: 'local-service',

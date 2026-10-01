@@ -1,9 +1,7 @@
 import { APP_HOST, APP_ORIGIN, APP_SCHEME } from './appProtocol.mjs';
 
 export const CANVAS_URL = `${APP_ORIGIN}/`;
-export const LAUNCHER_URL = `${APP_ORIGIN}/launcher/`;
-// The title strip follows the page: launcher stays dark, canvas uses its account theme.
-export const LAUNCHER_SURFACE = '#050505';
+export const DEFAULT_SURFACE = '#050505';
 export const CANVAS_SURFACE = '#111111';
 export const LIGHT_CANVAS_SURFACE = '#f6f7f9';
 export const TITLE_BAR_HEIGHT = 32;
@@ -14,7 +12,7 @@ const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
 // The host fills the whole window behind the WebContentsView. A drag region on
 // html/body intercepts native mouse input even over that child view on Windows.
 const TITLE_STRIP_URL = `data:text/html;charset=utf-8,${encodeURIComponent(
-  `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:${LAUNCHER_SURFACE};user-select:none}.title-strip{height:${TITLE_BAR_HEIGHT}px;-webkit-app-region:drag}</style></head><body><div class="title-strip"></div></body></html>`,
+  `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:${DEFAULT_SURFACE};user-select:none}.title-strip{height:${TITLE_BAR_HEIGHT}px;-webkit-app-region:drag}</style></head><body><div class="title-strip"></div></body></html>`,
 )}`;
 
 export function isAppUrl(value) {
@@ -35,7 +33,6 @@ export function isExternalUrl(value) {
 }
 
 export function surfaceColorFor(url, theme = 'dark') {
-  if (String(url || '').startsWith(LAUNCHER_URL)) return LAUNCHER_SURFACE;
   return theme === 'light' ? LIGHT_CANVAS_SURFACE : CANVAS_SURFACE;
 }
 
@@ -51,8 +48,8 @@ function webPreferences(preload) {
   };
 }
 
-// One window for launcher and canvas. The launcher keeps a separate native strip; the canvas
-// fills the window and reserves the right of its draggable header for native window controls.
+// One local canvas window. The canvas fills the window and reserves the right of its draggable
+// header for native window controls.
 // Navigation never leaves aifisher://app;
 // external links open in the system browser, and app pages such as /diagnostics open in an app
 // window.
@@ -74,11 +71,11 @@ export function createMainWindow({
     show: false,
     title: 'AIFISHER',
     icon,
-    backgroundColor: LAUNCHER_SURFACE,
+    backgroundColor: DEFAULT_SURFACE,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: LAUNCHER_SURFACE,
+      color: DEFAULT_SURFACE,
       symbolColor: WINDOW_SYMBOL_COLOR,
       height: TITLE_BAR_HEIGHT,
     },
@@ -91,7 +88,7 @@ export function createMainWindow({
   });
   window.removeMenu();
   const view = new WebContentsView({ webPreferences: webPreferences(preload) });
-  view.setBackgroundColor(LAUNCHER_SURFACE);
+  view.setBackgroundColor(DEFAULT_SURFACE);
   window.contentView.addChildView(view);
   let canvasChrome = false;
   const applyTitleStrip = () => {
@@ -110,7 +107,7 @@ export function createMainWindow({
   layout();
   window.on('resize', layout);
 
-  let surface = LAUNCHER_SURFACE;
+  let surface = DEFAULT_SURFACE;
   let currentTheme = 'dark';
   let navigating = false;
   const updateChrome = (url) => {
@@ -138,8 +135,7 @@ export function createMainWindow({
   };
   view.webContents.on('did-start-navigation', ({ url, isSameDocument, isMainFrame }) => {
     if (!isMainFrame || isSameDocument || !isAppUrl(url)) return;
-    // Never carry the previous account's appearance through a full page navigation. The new
-    // canvas applies its own account preference after hydration; login remains dark.
+    // Repaint native chrome during a full page navigation; the canvas restores its local theme.
     navigating = true;
     updateChrome(url);
     paint(surfaceColorFor(url));

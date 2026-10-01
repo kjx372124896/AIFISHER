@@ -18,19 +18,12 @@ import { KlingVideoProvider } from '../providers/klingProvider.js';
 import { MurekaAudioProvider } from '../providers/murekaProvider.js';
 import { GlmTextProvider, KimiTextProvider } from '../providers/officialTextProvider.js';
 import {
-  RelayAudioProvider,
-  RelayImageProvider,
-  RelayMidjourneyProvider,
-  RelayMusicProvider,
-  RelayTextProvider,
-  RelayVideoProvider,
-} from '../providers/relayProvider.js';
-import {
   RunningHubGlobalImageProvider,
   RunningHubGlobalVideoProvider,
   RunningHubImageProvider,
   RunningHubVideoProvider,
 } from '../providers/runninghubProvider.js';
+import { DynamicProtocolProvider } from '../providerFramework/dynamicProvider.js';
 
 function contract(name, handler, kinds, execution, requiredSecrets) {
   return Object.freeze({
@@ -76,18 +69,6 @@ export const GENERATION_PROVIDER_CONTRACTS = Object.freeze([
     'polling',
     ['RUNNINGHUB_GLOBAL_API_KEY'],
   ),
-  contract('RelayImageProvider', RelayImageProvider, ['image'], 'polling', ['RELAY_API_KEY']),
-  contract(
-    'RelayMidjourneyProvider',
-    RelayMidjourneyProvider,
-    ['image'],
-    'polling',
-    ['RELAY_API_KEY'],
-  ),
-  contract('RelayVideoProvider', RelayVideoProvider, ['video'], 'polling', ['RELAY_API_KEY']),
-  contract('RelayTextProvider', RelayTextProvider, ['text'], 'immediate', ['RELAY_API_KEY']),
-  contract('RelayAudioProvider', RelayAudioProvider, ['audio'], 'polling', ['RELAY_API_KEY']),
-  contract('RelayMusicProvider', RelayMusicProvider, ['audio'], 'polling', ['RELAY_API_KEY']),
   contract('MurekaAudioProvider', MurekaAudioProvider, ['audio'], 'polling', ['MUREKA_API_KEY']),
   contract('DoubaoVideoProvider', DoubaoVideoProvider, ['video'], 'polling', ['ARK_API_KEY']),
   contract('DreaminaCliVideoProvider', DreaminaCliVideoProvider, ['video'], 'polling', []),
@@ -116,6 +97,7 @@ export const GENERATION_PROVIDER_CONTRACTS = Object.freeze([
     ['RUNNINGHUB_GLOBAL_API_KEY'],
   ),
   contract('GrokVideoProvider', GrokVideoProvider, ['video'], 'polling', ['GROK_API_KEY']),
+  contract('DynamicProtocolProvider', DynamicProtocolProvider, ['text', 'image', 'video', 'audio'], 'dynamic', []),
 ]);
 
 const PROVIDERS_BY_NAME = new Map(

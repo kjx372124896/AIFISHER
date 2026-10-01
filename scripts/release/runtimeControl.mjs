@@ -47,7 +47,6 @@ export const USER_PROVIDER_SECRET_KEYS = Object.freeze([
   'FAL_API_KEY',
   'ALIYUN_API_KEY',
   'MUREKA_API_KEY',
-  'RELAY_API_KEY',
   'RUNNINGHUB_API_KEY',
   'RUNNINGHUB_GLOBAL_API_KEY',
   'RUNNINGHUB_IMAGE_ACCESS_PASSWORD',
@@ -134,7 +133,6 @@ function portablePaths(installRoot, overrides = {}) {
     record: path.join(data, 'run', 'processes.json'),
     lifecycleLog: path.join(data, 'logs', 'runtime-lifecycle.jsonl'),
     packageManifest: path.join(app, 'package.json'),
-    identityRuntimeConfig: path.join(app, 'config', 'identity-runtime.json'),
     providerCredentialHelper: path.join(app, 'tools', 'providerCredentialBridge.ps1'),
     node: overrides.nodeExecutable || path.join(app, 'runtime', 'node', 'node.exe'),
     ffmpeg: overrides.ffmpegExecutable || path.join(app, 'bin', 'ffmpeg.exe'),
@@ -171,116 +169,6 @@ function defaultProviderCredentialStoreFactory({ filePath, helperPath }) {
     allowedKeys: USER_PROVIDER_SECRET_KEYS,
     protector: createWindowsDpapiProtector({ helperPath }),
   });
-}
-
-function exactObjectKeys(value, expected) {
-  return (
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === expected.length &&
-    expected.every((key) => Object.hasOwn(value, key))
-  );
-}
-
-function invalidIdentityRuntimeConfiguration(cause) {
-  return new RuntimeControlError(
-    'LOCAL_AUTHENTICATION_CONFIG_INVALID',
-    '候选包缺少可验证的 AIFISHER Identity 公开配置',
-    cause ? { cause } : undefined,
-  );
-}
-
-export async function loadPackagedIdentityRuntimeConfiguration(paths, { required = false } = {}) {
-  let text;
-  try {
-    text = await readFile(paths.identityRuntimeConfig, 'utf8');
-  } catch (error) {
-    if (!required && error?.code === 'ENOENT') return {};
-    throw invalidIdentityRuntimeConfiguration(error);
-  }
-  try {
-    if (Buffer.byteLength(text, 'utf8') > 8_192) throw new Error('configuration is oversized');
-    const document = JSON.parse(text);
-    if (
-      !exactObjectKeys(document, [
-        'schemaVersion',
-        'issuer',
-        'audience',
-        'sessionStatusUrl',
-        'publicKey',
-      ]) ||
-      document.schemaVersion !== 3 ||
-      !exactObjectKeys(document.publicKey, ['path', 'spkiSha256']) ||
-      typeof document.audience !== 'string' ||
-      !/^[A-Za-z0-9._-]{1,64}$/u.test(document.audience) ||
-      typeof document.publicKey.path !== 'string' ||
-      !/^security\/[A-Za-z0-9][A-Za-z0-9._-]*\.pem$/u.test(document.publicKey.path) ||
-      typeof document.publicKey.spkiSha256 !== 'string' ||
-      !/^[a-f0-9]{64}$/u.test(document.publicKey.spkiSha256)
-    ) {
-      throw new Error('configuration shape is invalid');
-    }
-
-    const issuer = new URL(document.issuer);
-    if (
-      issuer.protocol !== 'https:' ||
-      issuer.username ||
-      issuer.password ||
-      issuer.pathname !== '/' ||
-      issuer.search ||
-      issuer.hash ||
-      document.issuer !== issuer.origin
-    ) {
-      throw new Error('issuer is invalid');
-    }
-    const sessionStatus = new URL(document.sessionStatusUrl);
-    if (
-      sessionStatus.origin !== issuer.origin ||
-      sessionStatus.pathname !== '/v1/session-validations' ||
-      sessionStatus.username ||
-      sessionStatus.password ||
-      sessionStatus.search ||
-      sessionStatus.hash ||
-      document.sessionStatusUrl !== sessionStatus.href
-    ) {
-      throw new Error('session-status endpoint is invalid');
-    }
-    const publicKeyPath = path.resolve(paths.app, ...document.publicKey.path.split('/'));
-    const relativePublicKeyPath = path.relative(paths.app, publicKeyPath);
-    if (
-      !relativePublicKeyPath ||
-      relativePublicKeyPath.startsWith('..') ||
-      path.isAbsolute(relativePublicKeyPath)
-    ) {
-      throw new Error('public-key path escapes the application directory');
-    }
-    const publicKeyText = await readFile(publicKeyPath, 'utf8');
-    if (Buffer.byteLength(publicKeyText, 'utf8') > 8_192 || /PRIVATE KEY/u.test(publicKeyText)) {
-      throw new Error('public-key file is invalid');
-    }
-    const publicKey = crypto.createPublicKey(publicKeyText);
-    if (publicKey.type !== 'public' || publicKey.asymmetricKeyType !== 'ed25519') {
-      throw new Error('public-key type is invalid');
-    }
-    const fingerprint = crypto
-      .createHash('sha256')
-      .update(publicKey.export({ type: 'spki', format: 'der' }))
-      .digest('hex');
-    if (fingerprint !== document.publicKey.spkiSha256) {
-      throw new Error('public-key fingerprint does not match');
-    }
-
-    return {
-      AIFISHER_ACCESS_TOKEN_PUBLIC_KEY_PATH: publicKeyPath,
-      AIFISHER_ACCESS_TOKEN_ISSUER: document.issuer,
-      AIFISHER_ACCESS_TOKEN_AUDIENCE: document.audience,
-      AIFISHER_SESSION_STATUS_URL: document.sessionStatusUrl,
-    };
-  } catch (error) {
-    if (error instanceof RuntimeControlError) throw error;
-    throw invalidIdentityRuntimeConfiguration(error);
-  }
 }
 
 export async function loadPackagedProductVersion(paths) {
@@ -588,13 +476,9 @@ export function createRuntimeController({
       );
     }
     const userValues = parseEnvironment(await readFile(paths.env, 'utf8'));
-    const identityValues = await loadPackagedIdentityRuntimeConfiguration(paths, {
-      required: Boolean(requestedOpaqueUserId || userValues.AIFISHER_ACTIVE_USER_ID),
-    });
     const productVersion = await loadPackagedProductVersion(paths);
     const values = {
       ...userValues,
-      ...identityValues,
       AIFISHER_PRODUCT_VERSION: productVersion,
     };
     const backendPort = normalizePort(configuredBackendPort ?? values.SERVER_PORT, 3001);

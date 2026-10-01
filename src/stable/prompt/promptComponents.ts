@@ -43,6 +43,7 @@ export interface PresetListProps {
 export interface PresetFormProps {
   type: PromptPresetType;
   initialCategory?: string;
+  initialItem?: PromptPresetItem;
   onSave(): void;
   onCancel(): void;
 }
@@ -51,6 +52,7 @@ export interface PresetCardProps {
   isSelected: boolean;
   onClick(): void;
   onMouseEnter(): void;
+  onEdit(): void;
   onDelete(): Promise<boolean>;
 }
 export function presetText(item?: PromptPreset) {

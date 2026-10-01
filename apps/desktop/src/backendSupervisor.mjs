@@ -17,7 +17,6 @@ export function createBackendSupervisor({
   cwd,
   createEnvironment,
   logsDirectory,
-  getAccessToken,
   serviceName = 'AIFISHER Backend',
   now = Date.now,
   setTimer = setTimeout,
@@ -69,20 +68,6 @@ export function createBackendSupervisor({
     };
   }
 
-  function answerToken(current, id) {
-    Promise.resolve()
-      .then(() => getAccessToken())
-      .catch(() => null)
-      .then((token) => {
-        if (child !== current) return;
-        try {
-          current.postMessage({ type: 'access-token', id, token: token ?? null });
-        } catch {
-          // The backend exited while the token was being fetched.
-        }
-      });
-  }
-
   function handleExit(current) {
     if (child !== current) return;
     child = null;
@@ -130,8 +115,6 @@ export function createBackendSupervisor({
       if (message?.type === 'ready') {
         clearTimer(timer);
         if (child === current) publish('ready');
-      } else if (message?.type === 'access-token-request') {
-        answerToken(current, message.id);
       }
     });
     current.once('exit', () => {

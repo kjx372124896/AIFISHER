@@ -2,29 +2,29 @@ import os from 'node:os';
 import path from 'node:path';
 
 // A packaged install keeps everything beside the executable. A development run executes the
-// repository sources and may borrow configuration (Identity keys, defaults) from an install, but
-// never its data, its login or its update bridge.
-export function resolveInstallation({ packaged, executablePath, sourceRoot, environment = process.env }) {
+// repository sources and may borrow packaged defaults from an install, but never its data or
+// update bridge.
+export function resolveInstallation({ packaged, executablePath, sourceRoot, resourcesPath, environment = process.env }) {
   const localAppData = environment.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
   const legacyTauri = path.join(localAppData, 'AIFISHER', 'TauriPrototype');
   if (packaged) {
     const root = path.dirname(executablePath);
-    const app = path.join(root, 'app');
+    const app = path.join(resourcesPath || path.join(root, 'resources'), 'app');
+    const localRoot = path.join(localAppData, 'AIFISHER');
     return describe({
       packaged: true,
       root,
       app,
       code: app,
-      data: path.join(root, 'data'),
+      data: path.join(localRoot, 'Data'),
       server: path.join(app, 'server', 'index.js'),
       dist: path.join(app, 'dist'),
-      launcher: path.join(app, 'desktop', 'launcher'),
-      tools: path.join(app, 'tools'),
+      tools: path.join(app, 'scripts', 'release'),
       envTemplate: path.join(app, 'defaults', '.env.example'),
       packageManifest: path.join(app, 'package.json'),
       icon: path.join(app, 'desktop', 'assets', 'aifisher.ico'),
-      updateBridge: path.join(app, 'tools', 'AIFISHER.UpdateBridge.exe'),
-      state: path.join(localAppData, 'AIFISHER', 'Desktop'),
+      updateBridge: path.join(app, 'scripts', 'release', 'AIFISHER.UpdateBridge.exe'),
+      state: path.join(localRoot, 'Desktop'),
       legacyState: legacyTauri,
       devUserId: null,
     });
@@ -43,7 +43,6 @@ export function resolveInstallation({ packaged, executablePath, sourceRoot, envi
     data: path.resolve(environment.AIFISHER_DESKTOP_DATA_ROOT || path.join(scratch, 'data')),
     server: path.join(repository, 'server', 'index.js'),
     dist: path.join(repository, 'dist'),
-    launcher: path.join(repository, 'apps', 'desktop', 'launcher', 'dist'),
     tools: path.join(repository, 'scripts', 'release'),
     envTemplate: configured
       ? path.join(app, 'defaults', '.env.example')
@@ -63,12 +62,7 @@ function describe(base) {
     logs: path.join(base.data, 'logs'),
     config: path.join(base.data, 'config'),
     envFile: path.join(base.data, 'config', '.env'),
-    identityRuntimeConfig: path.join(base.app, 'config', 'identity-runtime.json'),
     providerCredentialHelper: path.join(base.tools, 'providerCredentialBridge.ps1'),
-    tokenFile: path.join(base.state, 'identity-session.bin'),
-    launcherPreferences: path.join(base.state, 'launcher.json'),
-    legacyTokenFile: base.legacyState ? path.join(base.legacyState, 'identity-session.bin') : null,
-    legacyLauncherPreferences: base.legacyState ? path.join(base.legacyState, 'launcher.json') : null,
   });
 }
 
@@ -76,7 +70,6 @@ function describe(base) {
 export function releasePaths(installation) {
   return {
     app: installation.app,
-    identityRuntimeConfig: installation.identityRuntimeConfig,
     packageManifest: installation.packageManifest,
   };
 }

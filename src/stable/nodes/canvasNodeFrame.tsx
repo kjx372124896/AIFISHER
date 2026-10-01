@@ -1,4 +1,5 @@
 import type { CanvasComponent } from '../app/canvasComponentType';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
 import type * as ReactTypes from 'react';
 import { isResizableMediaNode } from '../media/mediaNodeSizing';
 type Runtime = Pick<typeof ReactTypes, 'createElement' | 'useState' | 'useRef' | 'useEffect'>;
@@ -77,10 +78,12 @@ export function CanvasConnectors(
   Connector: CanvasComponent,
 ) {
   if (props.nodeType === 'ComfyUI') return null;
+  const pluginDefinition = getCanvasPluginNodeDefinition(props.nodeType);
   return (
     <>
       {React.createElement(Connector, { ...props, side: 'left' })}
       {props.nodeType !== 'Image Compare' &&
+        pluginDefinition?.hasSourceHandle !== false &&
         React.createElement(Connector, { ...props, side: 'right' })}
     </>
   );
@@ -400,6 +403,9 @@ export function CanvasNode(
         : props.data.comfyMode === 'minimax-h3-t2va'
           ? components.MiniMax
           : components.LegacyWorkflow
-      : components[type];
+      : components[type] ??
+        (getCanvasPluginNodeDefinition(props.data.type) || props.data.type.includes(':')
+          ? components.Plugin
+          : undefined);
   return component ? React.createElement(component, props) : null;
 }

@@ -59,4 +59,8 @@ export type ModelGroupFilter = (groups: ModelGroup[]) => ModelGroup[];
 
 /** 只裁剪选择器视图，不克隆、删除或改写产品目录中的模型与来源。 */
 export const filterCanvasModelGroups: ModelGroupFilter = (groups) =>
-  groups.filter((group) => COMMON_CANVAS_MODELS.has(group.canonicalModel));
+  groups.filter(
+    (group) =>
+      COMMON_CANVAS_MODELS.has(group.canonicalModel) ||
+      group.variants.some((variant) => variant.source.startsWith('custom:')),
+  );

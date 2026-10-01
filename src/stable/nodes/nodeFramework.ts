@@ -293,6 +293,7 @@ function applyCanvasNodeDefaults(candidate: Record<string, unknown>): Record<str
 function applyFreshCanvasNodeDefaults(candidate: Record<string, unknown>): Record<string, unknown> {
   const type = canonicalType(String(candidate.type ?? ''));
   if (type === 'image') {
+    if (typeof candidate.imageModel === 'string' && candidate.imageModel) return candidate;
     return {
       ...candidate,
       model: DEFAULT_CANVAS_IMAGE_MODEL,
@@ -301,6 +302,7 @@ function applyFreshCanvasNodeDefaults(candidate: Record<string, unknown>): Recor
     };
   }
   if (type === 'video') {
+    if (typeof candidate.videoModel === 'string' && candidate.videoModel) return candidate;
     return {
       ...candidate,
       model: DEFAULT_CANVAS_VIDEO_MODEL,

@@ -1,4 +1,5 @@
 import type * as ReactTypes from 'react';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
 import type { CanvasViewport } from '../canvas/canvasNavigation';
 import {
   minimapScene,
@@ -137,7 +138,7 @@ export function CanvasMinimap(React: Runtime, props: Props, measure: NodeMeasure
             width={node.width * scene.scale}
             height={node.height * scene.scale}
             rx={2}
-            fill={node.type === 'Video' ? '#a855f7' : '#3b82f6'}
+            fill={getCanvasPluginNodeDefinition(String(node.type || ''))?.minimapColor || (node.type === 'Video' ? '#a855f7' : '#3b82f6')}
           />
         ))}
       </svg>

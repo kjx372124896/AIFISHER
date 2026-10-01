@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { RUNTIME_PATHS } from '../workspace/runtimePaths.js';
 import { isLikelyProviderApiKey, modelOverrideKey } from '../../src/shared/modelOverrideKey.js';
+import { loadDynamicModelCatalog } from '../providerFramework/catalog.js';
 
 export const DEFAULT_SNAPSHOT_PATH = path.join(
   RUNTIME_PATHS.SERVER_DIR,
@@ -144,7 +145,12 @@ export function loadModelCatalog({
 } = {}) {
   try {
     const snapshot = JSON.parse(fileSystem.readFileSync(snapshotPath, 'utf8'));
-    if (snapshot && typeof snapshot === 'object') return applyModelIdOverrides(snapshot);
+    if (snapshot && typeof snapshot === 'object') {
+      return {
+        ...applyModelIdOverrides(snapshot),
+        ...loadDynamicModelCatalog(),
+      };
+    }
     logger.error('[ModelCatalog] 快照格式非法，云端模型将全部不可用：', snapshotPath);
   } catch (error) {
     logger.error(
@@ -153,7 +159,7 @@ export function loadModelCatalog({
       error.message,
     );
   }
-  return {};
+  return loadDynamicModelCatalog();
 }
 
 // Reuse the account-scoped configuration keys also consumed by canvas generation.

@@ -1,6 +1,11 @@
 import type { Runtime, GridProps, Icons, LibraryItem, AssetFields } from './canvasLibrary';
 import { ASSET_CATEGORIES, assetCategory } from '../media/assetOrganization';
 
+const ASSET_FOLDER_STORAGE_KEY = 'aifisher.asset-library.folders.v1';
+const normalizeFolderPath = (value: string) => value.split('/').map((part) => part.trim()).filter(Boolean).join('/');
+const parentFolderPath = (value: string) => value.split('/').slice(0, -1).join('/');
+const folderName = (value: string) => value.split('/').filter(Boolean).at(-1) || value;
+
 export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons) {
   const {
     selectedCategory,
@@ -20,6 +25,18 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
   const [ownershipFilter, setOwnershipFilter] = React.useState('');
   const [layout, setLayout] = React.useState<'grid' | 'list'>('grid');
   const [editing, setEditing] = React.useState<(AssetFields & { id: string }) | null>(null);
+  const [currentFolder, setCurrentFolder] = React.useState('');
+  const [newFolderName, setNewFolderName] = React.useState('');
+  const [creatingFolder, setCreatingFolder] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [folders, setFolders] = React.useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(ASSET_FOLDER_STORAGE_KEY) || '[]');
+      return Array.isArray(stored) ? stored.filter((value): value is string => typeof value === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
   const editInput = React.useRef<HTMLInputElement>(null);
   const owner = React.useRef(true);
   React.useEffect(() => {
@@ -32,15 +49,28 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
     if (editing?.id) editInput.current?.focus();
   }, [editing?.id]);
   const categoryOf = (item: LibraryItem) =>
-    workflow ? item.category || '其他' : assetCategory(item.category);
+    workflow ? item.category || '其他' : normalizeFolderPath(assetCategory(item.category));
+  const rootCategoryOf = (item: LibraryItem) => categoryOf(item).split('/')[0] || '其他';
   const categories = [
     'All',
     ...new Set([
       ...(workflow ? [] : ASSET_CATEGORIES),
-      ...assets.map(categoryOf).filter((category) => category !== 'All'),
+      ...assets.map(rootCategoryOf).filter((category) => category !== 'All'),
     ]),
   ];
   const selected = categories.includes(selectedCategory) ? selectedCategory : 'All';
+  const inferredFolders = assets
+    .map(categoryOf)
+    .filter((value) => value.includes('/'))
+    .flatMap((value) => {
+      const parts = value.split('/');
+      return parts.slice(1).map((_, index) => parts.slice(0, index + 2).join('/'));
+    });
+  const allFolders = [...new Set([...folders, ...inferredFolders])].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const activePath = workflow || selected === 'All' ? '' : currentFolder || selected;
+  const childFolders = workflow || !activePath
+    ? []
+    : allFolders.filter((value) => parentFolderPath(value) === activePath);
   const ownerships = [
     ...new Set(
       assets.map((item) => item.ownership?.trim()).filter((value): value is string => !!value),
@@ -52,7 +82,11 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
       : '';
   const filtered = assets.filter(
     (item) =>
-      (selected === 'All' || categoryOf(item) === selected) &&
+      (workflow
+        ? selected === 'All' || categoryOf(item) === selected
+        : selected === 'All'
+          ? true
+          : categoryOf(item) === activePath) &&
       (!effectiveOwnership ||
         (effectiveOwnership === '__unassigned'
           ? !item.ownership?.trim()
@@ -63,6 +97,12 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
           .toLocaleLowerCase()
           .includes(query.trim().toLocaleLowerCase())),
   );
+  const selectedAssets = assets.filter((item) => selectedIds.includes(item.id));
+  const persistFolders = (next: string[]) => {
+    const normalized = [...new Set(next.map(normalizeFolderPath).filter((value) => value.includes('/')))];
+    setFolders(normalized);
+    localStorage.setItem(ASSET_FOLDER_STORAGE_KEY, JSON.stringify(normalized));
+  };
   const { DeleteIcon, ImageIcon, VideoIcon, AudioIcon, WorkflowIcon } = icons;
   const busy = !!deleting || !!saving;
   const preview = (item: LibraryItem) => {
@@ -195,6 +235,8 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
                     : (index + (event.key === 'ArrowRight' ? 1 : categories.length - 1)) %
                       categories.length;
               setSelectedCategory(categories[next]);
+              setCurrentFolder('');
+              setSelectedIds([]);
               setConfirmation(null);
               event.currentTarget.parentElement
                 ?.querySelectorAll<HTMLButtonElement>('button')
@@ -202,6 +244,8 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
             }}
             onClick={() => {
               setSelectedCategory(category);
+              setCurrentFolder('');
+              setSelectedIds([]);
               setConfirmation(null);
             }}
           >
@@ -209,6 +253,85 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
           </button>
         ))}
       </div>
+      {!workflow && selected !== 'All' && (
+        <div className="fisher-library-folderbar">
+          <div className="fisher-library-breadcrumbs">
+            {activePath.split('/').map((part, index, parts) => {
+              const path = parts.slice(0, index + 1).join('/');
+              return (
+                <button key={path} type="button" onClick={() => { setCurrentFolder(index === 0 ? '' : path); setSelectedIds([]); }}>
+                  {part}
+                </button>
+              );
+            })}
+          </div>
+          {creatingFolder ? (
+            <form
+              className="fisher-library-folder-create"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const name = newFolderName.trim();
+                if (!name) return;
+                const next = normalizeFolderPath(`${activePath}/${name}`);
+                if (allFolders.includes(next)) {
+                  window.alert('当前目录下已存在同名文件夹。');
+                  return;
+                }
+                persistFolders([...folders, next]);
+                setNewFolderName('');
+                setCreatingFolder(false);
+              }}
+            >
+              <input
+                autoFocus
+                maxLength={80}
+                placeholder="文件夹名称"
+                value={newFolderName}
+                onChange={(event) => setNewFolderName(event.target.value)}
+              />
+              <button type="submit" className="is-primary" disabled={!newFolderName.trim()}>创建</button>
+              <button type="button" onClick={() => { setNewFolderName(''); setCreatingFolder(false); }}>取消</button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="is-primary"
+              onClick={() => setCreatingFolder(true)}
+            >
+              + 新建文件夹
+            </button>
+          )}
+        </div>
+      )}
+      {!workflow && selectedIds.length > 0 && (
+        <div className="fisher-library-batchbar">
+          <strong>已选 {selectedIds.length} 项</strong>
+          <button type="button" className="is-primary" disabled={busy} onClick={() => {
+            selectedAssets.forEach((item) => onSelectAsset(item));
+            setSelectedIds([]);
+          }}>加入画布</button>
+          {activePath && (
+            <button type="button" disabled={busy} onClick={() => {
+              const items = [...selectedAssets];
+              void (async () => {
+                for (const item of items) {
+                  await onEditAsset?.(item.id, { name: item.name, category: activePath, ownership: item.ownership || '' });
+                }
+                if (owner.current) setSelectedIds([]);
+              })();
+            }}>移到当前文件夹</button>
+          )}
+          <button type="button" className="is-danger" disabled={busy} onClick={() => {
+            if (!window.confirm(`确认删除选中的 ${selectedIds.length} 个资产？`)) return;
+            const ids = [...selectedIds];
+            void (async () => {
+              for (const id of ids) await onDeleteAsset(id);
+              if (owner.current) setSelectedIds([]);
+            })();
+          }}>删除所选</button>
+          <button type="button" disabled={busy} onClick={() => setSelectedIds([])}>取消选择</button>
+        </div>
+      )}
       {!workflow && (
         <div className="fisher-library-tools">
           <input
@@ -250,6 +373,29 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
         </div>
       )}
       <div className="fisher-library-scroll">
+        {!workflow && childFolders.length > 0 && (
+          <div className="fisher-library-folders">
+            {childFolders.map((folder) => (
+              <div key={folder} className="fisher-library-folder-card">
+                <button type="button" onClick={() => { setCurrentFolder(folder); setSelectedIds([]); }}>
+                  <span className="fisher-library-folder-icon">📁</span>
+                  <span>{folderName(folder)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="fisher-library-folder-delete"
+                  aria-label={`删除文件夹 ${folderName(folder)}`}
+                  onClick={() => {
+                    const hasAssets = assets.some((item) => categoryOf(item) === folder || categoryOf(item).startsWith(`${folder}/`));
+                    const hasChildren = allFolders.some((value) => value !== folder && value.startsWith(`${folder}/`));
+                    if (hasAssets || hasChildren) return window.alert('文件夹内还有资产或子文件夹，不能删除。');
+                    persistFolders(folders.filter((value) => value !== folder));
+                  }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
         {editing && (
           <form
             className="fisher-library-editor"
@@ -303,11 +449,10 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
               </label>
             </div>
             <select aria-label="选择已有分类" disabled={busy} className="w-full rounded-lg border border-neutral-700 bg-[#1a1a1a] px-3 py-2 text-white"
-              value={categories.includes(editing.category) ? editing.category : ''}
+              value={[...categories, ...allFolders].includes(editing.category) ? editing.category : ''}
               onChange={(event) => { if (event.target.value) setEditing({ ...editing, category: event.target.value }); }}>
               <option value="" disabled>选择已有分类</option>
-              {categories
-                .filter((value) => value !== 'All')
+              {[...new Set([...categories.filter((value) => value !== 'All'), ...allFolders])]
                 .map((value) => (
                   <option key={value} value={value}>{value}</option>
                 ))}
@@ -330,7 +475,7 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
           <div className="fisher-library-empty" role="status">
             加载中...
           </div>
-        ) : !filtered.length ? (
+        ) : !filtered.length && !childFolders.length ? (
           <div className="fisher-library-empty">
             {workflow
               ? '当前分类还没有 SKILL。选中画布节点后，可将组合保存为本地 SKILL。'
@@ -354,6 +499,7 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
             <table className="fisher-library-table">
               <thead>
                 <tr>
+                  <th scope="col" className="fisher-library-select-col">选择</th>
                   <th scope="col">名称</th>
                   <th scope="col">分类</th>
                   <th scope="col">归属</th>
@@ -364,7 +510,10 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
               </thead>
               <tbody>
                 {filtered.map((item) => (
-                  <tr key={item.id} data-library-id={item.id}>
+                  <tr key={item.id} data-library-id={item.id} data-selected={selectedIds.includes(item.id) ? 'true' : undefined}>
+                    <td className="fisher-library-select-col">
+                      <input type="checkbox" aria-label={`选择 ${item.name}`} checked={selectedIds.includes(item.id)} onChange={() => setSelectedIds((old) => old.includes(item.id) ? old.filter((id) => id !== item.id) : [...old, item.id])} />
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -387,7 +536,12 @@ export function CanvasLibraryGrid(React: Runtime, props: GridProps, icons: Icons
         ) : (
           <div className="fisher-library-grid">
             {filtered.map((item) => (
-              <article key={item.id} data-library-id={item.id} className="fisher-library-card">
+              <article key={item.id} data-library-id={item.id} data-selected={selectedIds.includes(item.id) ? 'true' : undefined} className="fisher-library-card">
+                {!workflow && (
+                  <label className="fisher-library-card-select" title={`选择 ${item.name}`}>
+                    <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => setSelectedIds((old) => old.includes(item.id) ? old.filter((id) => id !== item.id) : [...old, item.id])} />
+                  </label>
+                )}
                 <button
                   type="button"
                   className="fisher-library-insert"

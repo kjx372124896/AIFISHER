@@ -328,27 +328,9 @@ export function createComfyLogPanel(client: LocalRuntimeClient) {
   return { host, start, stop, refresh, renderStatusError, setOpen };
 }
 
-function dockComfyPanel(host: HTMLElement, root: ParentNode): void {
-  // 画布顶栏始终保留账户中心插槽；ComfyUI 状态固定停靠在它左侧。
-  const account = root.querySelector<HTMLElement>('[data-fisherai-account-center-slot="true"]');
-  const toolbar = account?.parentElement;
+function dockComfyPanel(host: HTMLElement): void {
   const panel = host.querySelector<HTMLElement>('[data-fisherai-comfyui-log-panel]');
-  if (account && toolbar && panel) {
-    if (host.parentElement !== toolbar || host.nextElementSibling !== account) {
-      toolbar.insertBefore(host, account);
-    }
-    host.dataset.dock = 'topbar';
-    host.style.cssText =
-      'position:relative;left:auto;bottom:auto;z-index:70;flex:none;font-family:Inter,"Microsoft YaHei UI",system-ui,sans-serif;';
-    panel.style.left = 'auto';
-    panel.style.right = '0px';
-    panel.style.top = 'calc(100% + 8px)';
-    panel.style.bottom = '';
-    return;
-  }
-  if (host.dataset.dock !== 'topbar') return;
-  document.body.append(host);
-  delete host.dataset.dock;
+  if (host.parentElement !== document.body) document.body.append(host);
   host.style.cssText =
     'position:fixed;left:16px;bottom:16px;z-index:60;font-family:Inter,"Microsoft YaHei UI",system-ui,sans-serif;';
   if (panel) {
@@ -371,9 +353,9 @@ export function installComfyLogPanel(
     if (disposed || installed || root.querySelector(`[${HOST_ATTRIBUTE}]`)) return null;
     installed = createComfyLogPanel(client);
     document.body.append(installed.host);
-    dockComfyPanel(installed.host, root);
+    dockComfyPanel(installed.host);
     observer = new MutationObserver(() => {
-      if (installed) dockComfyPanel(installed.host, root);
+      if (installed) dockComfyPanel(installed.host);
     });
     observer.observe(root === document ? document.body : root, { childList: true, subtree: true });
     return installed;

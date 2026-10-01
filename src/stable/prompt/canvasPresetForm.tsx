@@ -9,7 +9,7 @@ import {
 import { usePromptMutation } from './usePromptMutation';
 export function CanvasPresetForm(
   React: PromptRuntime,
-  { type, initialCategory, onSave, onCancel }: PresetFormProps,
+  { type, initialCategory, initialItem, onSave, onCancel }: PresetFormProps,
   {
     BackIcon,
     UploadIcon,
@@ -18,10 +18,15 @@ export function CanvasPresetForm(
     TagIcon,
   }: Pick<PromptIcons, 'BackIcon' | 'UploadIcon' | 'ImageIcon' | 'Spinner' | 'TagIcon'>,
 ) {
-  const [title, setTitle] = React.useState(''),
-    [category, setCategory] = React.useState(initialCategory || ''),
-    [text, setText] = React.useState(''),
-    [preview, setPreview] = React.useState<string | null>(null),
+  const editing = Boolean(initialItem);
+  const [title, setTitle] = React.useState(initialItem?.title || ''),
+    [category, setCategory] = React.useState(initialItem?.category || initialCategory || ''),
+    [text, setText] = React.useState(
+      Array.isArray(initialItem?.prompt) ? initialItem.prompt.join('\n') : initialItem?.prompt || '',
+    ),
+    [preview, setPreview] = React.useState<string | null>(
+      typeof initialItem?.preview === 'string' ? initialItem.preview : null,
+    ),
     [reading, setReading] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null),
     readerRef = React.useRef<FileReader | null>(null),
@@ -87,18 +92,25 @@ export function CanvasPresetForm(
       mutation.setError(cause instanceof Error ? cause.message : '请填写完整信息');
       return;
     }
+    const input = {
+      type,
+      category: category.trim(),
+      title: title.trim(),
+      prompt: text.trim(),
+      previewBase64: preview?.startsWith('data:') ? preview : null,
+    };
     void mutation.run(
       (signal) =>
-        createPromptPresetClient().create(
-          {
-            type,
-            category: category.trim(),
-            title: title.trim(),
-            prompt: text.trim(),
-            previewBase64: preview,
-          },
-          signal,
-        ),
+        initialItem
+          ? createPromptPresetClient().update(
+              {
+                ...input,
+                originalCategory: initialItem.category,
+                originalTitle: initialItem.title,
+              },
+              signal,
+            )
+          : createPromptPresetClient().create(input, signal),
       onSave,
     );
   };
@@ -106,7 +118,7 @@ export function CanvasPresetForm(
   return (
     <div
       role="dialog"
-      aria-label="创建提示词预设"
+      aria-label={editing ? '编辑提示词预设' : '创建提示词预设'}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === 'Escape' && !event.nativeEvent.isComposing) cancel();
@@ -129,7 +141,7 @@ export function CanvasPresetForm(
           <BackIcon size={18} />
         </button>
         <h3 className={'text-base font-bold text-[var(--af-text)]'}>
-          {'创建新预设 ('}
+          {editing ? '编辑预设 (' : '创建新预设 ('}
           {type === 'image'
             ? '图片'
             : type === 'video'
@@ -330,7 +342,7 @@ export function CanvasPresetForm(
           }
         >
           {saving ? <Spinner size={16} className={'animate-spin'} /> : <TagIcon size={16} />}
-          {saving ? '保存中...' : '保存预设'}
+          {saving ? '保存中...' : editing ? '保存修改' : '保存预设'}
         </button>
       </div>
     </div>

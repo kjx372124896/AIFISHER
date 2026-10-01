@@ -8,12 +8,11 @@ import { loadModelCatalog } from '../../config/modelCatalog.js';
 import { GENERATION_PROVIDER_CONTRACTS } from '../../generation/generationProviderCatalog.js';
 import { classifyGenerationError, getUpstreamStatus } from '../../generation/generationErrors.js';
 import { submitOpenAiChatWithLogs } from '../../providers/providerKit.js';
-import { resolveRelayCredentials, resolveRelayRequestUrl } from '../../providers/relayProvider.js';
 import { assertDramaObject, DramaPlanError, DRAMA_PLAN_LIMITS, requireDramaProjectId } from './dramaPlan.js';
 import { resolveMediaArtifact } from '../../media/mediaArtifact.js';
 
-const TEXT_PROVIDERS = new Set(['DoubaoTextProvider', 'DeepSeekProvider', 'GlmTextProvider', 'KimiTextProvider', 'RelayTextProvider']);
-const CREDENTIAL_ALIASES = Object.freeze({ ARK_API_KEY: 'arkApiKey', DEEPSEEK_API_KEY: 'deepSeekApiKey', ZHIPU_API_KEY: 'zhipuApiKey', MOONSHOT_API_KEY: 'moonshotApiKey', RELAY_API_KEY: 'relayApiKey' });
+const TEXT_PROVIDERS = new Set(['DoubaoTextProvider', 'DeepSeekProvider', 'GlmTextProvider', 'KimiTextProvider']);
+const CREDENTIAL_ALIASES = Object.freeze({ ARK_API_KEY: 'arkApiKey', DEEPSEEK_API_KEY: 'deepSeekApiKey', ZHIPU_API_KEY: 'zhipuApiKey', MOONSHOT_API_KEY: 'moonshotApiKey' });
 const SECRET_BY_PROVIDER = new Map(GENERATION_PROVIDER_CONTRACTS.filter((item) => TEXT_PROVIDERS.has(item.name)).map((item) => [item.name, item.requiredSecrets[0]]));
 const SAFE_FAILURES = Object.freeze({
   PROVIDER_BALANCE_INSUFFICIENT: '文本模型余额不足，请检查模型账户；本次未自动重试',
@@ -122,9 +121,7 @@ export function textModelConnection(model, supplied) {
   const apiKey = String(supplied?.[secret] || supplied?.[CREDENTIAL_ALIASES[secret]] || '').trim();
   if (!apiKey) throw new DramaPlanError('请先连接当前选择的文本模型来源', 'DRAMA_MODEL_CONFIGURATION_REQUIRED', 503);
   const endpoint = model.endpoint['multimodal-chat'];
-  const url = model.provider === 'RelayTextProvider'
-    ? resolveRelayRequestUrl(resolveRelayCredentials({ RELAY_API_KEY: apiKey }), endpoint.url) : endpoint.url;
-  return { url, apiKey };
+  return { url: endpoint.url, apiKey };
 }
 
 function normalizeMessages(messages) {

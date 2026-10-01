@@ -18,6 +18,9 @@ import {
   requestAnchoredConfirmation,
 } from '../design/designSystem';
 import { preferenceStorage } from '../persistence/preferenceStore';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
+import type { PluginNodeResource, PluginResourceItem } from '../plugins/canvasPluginTypes';
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled', 'unknown']);
 const WORKFLOW_CANVAS_INSERT_REQUEST_EVENT = 'fisherai:add-workflow-node';
@@ -152,6 +155,19 @@ export interface WorkflowCanvasInputSlot {
 
 type CanvasNode = Record<string, unknown> & { id: string; type: string };
 type NodePatch = Partial<WorkflowCanvasNodeRecord>;
+
+function pluginResourceForNode(node: CanvasNode): PluginNodeResource | null {
+  return getCanvasPluginNodeDefinition(node.type)?.resource?.(toPluginNode(node as any)) || null;
+}
+
+function pluginBundleItems(node: CanvasNode): PluginResourceItem[] {
+  const resource = pluginResourceForNode(node);
+  if (!resource || resource.kind !== 'bundle' || !Array.isArray(resource.items)) return [];
+  return resource.items
+    .filter((item) => item && ['text', 'image', 'video', 'audio'].includes(item.kind))
+    .map((item, index) => ({ ...item, order: Number.isFinite(Number(item.order)) ? Number(item.order) : index }))
+    .sort((left, right) => Number(left.order) - Number(right.order));
+}
 
 const WORKFLOW_EXAMPLE_STORAGE_KEY = 'fisherai-workflow-example-bundles-v1';
 const WORKFLOW_EXAMPLE_MAX_BYTES = 512 * 1024;
@@ -787,6 +803,8 @@ function mediaKindForNode(
       ports[0]?.mediaKind
     );
   }
+  const pluginResource = pluginResourceForNode(node);
+  if (pluginResource && pluginResource.kind !== 'bundle') return pluginResource.kind;
   return TYPE_MEDIA[node.type];
 }
 
@@ -802,6 +820,12 @@ function compatibleWorkflowInputSlots(
   source: CanvasNode,
   sourcePortIndex = 0,
 ): WorkflowCanvasInputSlot[] {
+  const bundle = pluginBundleItems(source);
+  if (bundle.length) {
+    return expandWorkflowStorageSlots(target)
+      .filter((slot) => bundle.some((item) => mediaKindsCompatible(item.kind, slot.mediaKind)))
+      .sort(compareWorkflowSlots);
+  }
   const sourceMediaKind = mediaKindForNode(source, sourcePortIndex);
   if (!sourceMediaKind) return [];
   return expandWorkflowStorageSlots(target)
@@ -827,6 +851,14 @@ function workflowConnectionLimitNotice(
   source: CanvasNode,
   sourcePortIndex = 0,
 ): string | undefined {
+  const bundle = pluginBundleItems(source);
+  if (bundle.length) {
+    const parents = Array.isArray(target.parentIds) ? target.parentIds : [];
+    const free = expandWorkflowStorageSlots(target).filter((slot) => !parents[slot.slotIndex]);
+    return bundle.some((item) => free.some((slot) => mediaKindsCompatible(item.kind, slot.mediaKind)))
+      ? undefined
+      : '当前工作流没有可接收该资源包的空闲输入';
+  }
   const sourceMediaKind = mediaKindForNode(source, sourcePortIndex);
   if (!sourceMediaKind) return undefined;
   const compatibleSlots = compatibleWorkflowInputSlots(target, source, sourcePortIndex);
@@ -890,6 +922,15 @@ function assetFromNode(
     if (output.assetId) return { assetId: output.assetId, projectId, type: mediaKind };
     return localAssetReference(output.url, projectId, mediaKind);
   }
+  const pluginResource = pluginResourceForNode(node);
+  if (
+    pluginResource &&
+    pluginResource.kind !== 'bundle' &&
+    pluginResource.kind !== 'text' &&
+    mediaKindsCompatible(pluginResource.kind, mediaKind)
+  ) {
+    return localAssetReference(pluginResource.url, projectId, mediaKind);
+  }
   // Replacing an image or selecting a generation candidate changes resultUrl;
   // legacy assetId metadata can still name the previous character.
   const currentUrl = node.resultUrl || node.url || node.dataUrl;
@@ -915,6 +956,9 @@ function textFromNode(node: CanvasNode, sourcePortIndex: number): string | null 
     if (typeof output.value === 'string') return output.value;
     if (output.value !== undefined) return JSON.stringify(output.value);
   }
+  const pluginResource = pluginResourceForNode(node);
+  if (pluginResource && pluginResource.kind === 'text')
+    return typeof pluginResource.text === 'string' ? pluginResource.text : '';
   for (const value of [node.textContent, node.resultText, node.prompt, node.text]) {
     if (typeof value === 'string') return value;
   }
@@ -932,9 +976,45 @@ export function buildWorkflowCanvasValues(
   const sourcePortIndices = Array.isArray(node.sourcePortIndices) ? node.sourcePortIndices : [];
   const byId = new Map(connectedNodes.map((candidate) => [candidate.id, candidate]));
   const grouped = new Map<string, Array<Record<string, string>>>();
-  for (const slot of expandWorkflowStorageSlots(node)) {
+  const slots = expandWorkflowStorageSlots(node);
+  const bundleAssignments = new Map<number, PluginResourceItem>();
+  const reserved = new Set<number>();
+  for (const slot of slots) {
+    const parent = parents[slot.slotIndex] ? byId.get(parents[slot.slotIndex]) : undefined;
+    if (parent && pluginBundleItems(parent).length === 0) reserved.add(slot.slotIndex);
+  }
+  const bundleParents = [...new Set(parents.filter(Boolean))]
+    .map((id) => byId.get(id))
+    .flatMap((parent) => parent && pluginBundleItems(parent).length > 0 ? [parent] : []);
+  for (const parent of bundleParents) {
+    for (const item of pluginBundleItems(parent)) {
+      const target = slots
+        .filter((slot) => !reserved.has(slot.slotIndex))
+        .filter((slot) => mediaKindsCompatible(item.kind, slot.mediaKind))
+        .filter((slot) => item.kind === 'text' ? slot.source === 'parameter' : slot.source === 'input-port')
+        .sort(compareWorkflowSlots)[0];
+      if (!target) continue;
+      bundleAssignments.set(target.slotIndex, item);
+      reserved.add(target.slotIndex);
+    }
+  }
+  for (const slot of slots) {
+    const bundleItem = bundleAssignments.get(slot.slotIndex);
+    if (bundleItem) {
+      if (slot.source === 'parameter') {
+        const text = typeof bundleItem.text === 'string' ? bundleItem.text : '';
+        if (slot.required && !text.trim()) throw new Error(`${slot.label}连接的优化提示词为空`);
+        values[slot.bindingKey] = text;
+      } else {
+        const asset = localAssetReference(bundleItem.url, projectId, slot.mediaKind);
+        if (!asset) throw new Error(`${slot.label}需要当前项目内的${slot.mediaKind}素材`);
+        grouped.set(slot.bindingKey, [...(grouped.get(slot.bindingKey) || []), asset]);
+      }
+      continue;
+    }
     const parentId = parents[slot.slotIndex];
-    if (!parentId) {
+    const bundleAnchor = parentId ? byId.get(parentId) : undefined;
+    if (!parentId || (bundleAnchor && pluginBundleItems(bundleAnchor).length > 0)) {
       if (
         slot.source === 'parameter' &&
         slot.required &&

@@ -10,8 +10,6 @@ const RECOVERABLE_PROVIDERS = {
   SeedVr2ImageProvider: 'image',
   DreaminaCliImageProvider: 'image',
   DreaminaCliVideoProvider: 'video',
-  RelayVideoProvider: 'video',
-  RelayImageProvider: 'image',
   RunningHubVideoProvider: 'video',
   RunningHubGlobalVideoProvider: 'video',
   RunningHubImageProvider: 'image',

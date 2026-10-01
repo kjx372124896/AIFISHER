@@ -3,6 +3,8 @@ import { useWorkflowNodeSession } from './workflowNodeSession';
 import type * as ReactTypes from 'react';
 import type { WorkflowCanvasNodeRecord, WorkflowCanvasInputSlot } from './workflowCanvasNodes';
 import type { WorkflowCanvasBlueprint } from './workflowManagerClient';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
 type Runtime = Pick<
   typeof ReactTypes,
   | 'createElement'
@@ -169,7 +171,29 @@ export function CanvasWorkflowGenerator(React: Runtime, props: Props, Frame: Can
     previousConnectionSignature = React.useRef(connectionSignature),
     linkedNode = (slot: WorkflowCanvasInputSlot) => {
       const parentId = (node.parentIds || [])[slot.slotIndex];
-      return connectedNodes.find((node) => node.id === parentId);
+      return (
+        connectedNodes.find(
+          (candidate) =>
+            candidate.__workflowParentId === parentId &&
+            Number(candidate.__workflowSlotIndex) === slot.slotIndex,
+        ) || connectedNodes.find((candidate) => candidate.id === parentId)
+      );
+    },
+    linkedResource = (slot: WorkflowCanvasInputSlot) => {
+      const stored = (node.workflowSlotResources as Record<string, unknown> | undefined)?.[String(slot.slotIndex)];
+      if (stored) return stored as any;
+      const linked = linkedNode(slot);
+      if (!linked) return null;
+      const resource = getCanvasPluginNodeDefinition(linked.type)?.resource?.(
+        toPluginNode(linked as any),
+      );
+      if (!resource) return null;
+      if (resource.kind !== 'bundle') return resource;
+      const sourcePortIndex = Math.max(
+        0,
+        Math.trunc(Number((node.sourcePortIndices || [])[slot.slotIndex]) || 0),
+      );
+      return resource.items[sourcePortIndex] || null;
     },
     cardSlots = connectedSlots.filter((slot) => linkedNode(slot)),
     openSlots = slots.filter((slot) => !(node.parentIds || [])[slot.slotIndex]),
@@ -186,15 +210,22 @@ export function CanvasWorkflowGenerator(React: Runtime, props: Props, Frame: Can
       const slot = parameterSlot(parameter);
       return slot ? linkedNode(slot) : null;
     },
+    parameterResource = (parameter: Parameter) => {
+      const slot = parameterSlot(parameter);
+      return slot ? linkedResource(slot) : null;
+    },
     field = (parameter: Parameter, hero = false) => {
       const FieldContainer = parameter.control?.kind === 'seed' ? 'div' : 'label';
       const kind = parameter.control?.kind || 'text',
         linked = isText(parameter) ? parameterNode(parameter) : null,
+        linkedResourceValue = isText(parameter) ? parameterResource(parameter) : null,
         connected = !!linked,
         linkedEditable = connected && String(linked.type || '').toLowerCase() === 'text',
         readOnly = connected && !linkedEditable,
         value = connected
-          ? nodeText(linked)
+          ? linkedResourceValue?.kind === 'text' && typeof linkedResourceValue.text === 'string'
+            ? linkedResourceValue.text
+            : nodeText(linked)
           : (values[parameter.key] ?? parameter.control?.defaultValue ?? ''),
         numeric = kind === 'number' || kind === 'slider' || kind === 'seed',
         seedPolicy =
@@ -478,8 +509,15 @@ export function CanvasWorkflowGenerator(React: Runtime, props: Props, Frame: Can
     },
     slotCard = (slot: WorkflowCanvasInputSlot) => {
       const node = linkedNode(slot),
-        url = node?.url || node?.resultUrl || node?.lastFrame,
-        textValue = nodeText(node),
+        resource = linkedResource(slot),
+        url =
+          resource && resource.kind !== 'text' && typeof resource.url === 'string'
+            ? resource.url
+            : node?.url || node?.resultUrl || node?.lastFrame,
+        textValue =
+          resource?.kind === 'text' && typeof resource.text === 'string'
+            ? resource.text
+            : nodeText(node),
         connected = !!node;
       return (
         <div

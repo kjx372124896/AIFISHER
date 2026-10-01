@@ -9,6 +9,7 @@ export interface CanvasConnectionNode {
   midjourneyReferenceNodeIds?: Partial<Record<'cref' | 'sref' | 'dref', string>>;
   aspectRatio?: string;
   resultAspectRatio?: string;
+  workflowSlotResources?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -84,6 +85,7 @@ export interface ConnectCanvasNodesOptions {
   inputCount?: number;
   connectionMode?: string;
   modeField?: 'imageMode' | 'videoMode' | 'comfyMode';
+  slotResource?: { kind: 'text' | 'image' | 'video' | 'audio'; text?: string; url?: string };
 }
 
 export interface CanvasConnectionIdentity {
@@ -138,6 +140,12 @@ export function connectCanvasNodes<TNode extends CanvasConnectionNode>(
     }
     parentIds[portIndex] = options.parentId;
     sourcePortIndices[portIndex] = Math.max(0, Math.trunc(options.sourcePortIndex ?? 0));
+    if (options.slotResource) {
+      const current = nextChild.workflowSlotResources && typeof nextChild.workflowSlotResources === 'object' && !Array.isArray(nextChild.workflowSlotResources)
+        ? (nextChild.workflowSlotResources as Record<string, unknown>)
+        : {};
+      nextChild.workflowSlotResources = { ...current, [String(portIndex)]: options.slotResource };
+    }
     clearWorkflowTextParameterAtSlot(nextChild, portIndex);
   } else if (child.type === 'Image Compare' && !parentIds.includes(options.parentId)) {
     const nextParentIds =
@@ -227,6 +235,21 @@ export function disconnectCanvasNodes<TNode extends CanvasConnectionNode>(
     nextParentIds.forEach((parentId, index) => {
       if (!parentId && parentIds[index]) clearWorkflowTextParameterAtSlot(nextChild, index);
     });
+    const slotResources =
+      nextChild.workflowSlotResources &&
+      typeof nextChild.workflowSlotResources === 'object' &&
+      !Array.isArray(nextChild.workflowSlotResources)
+        ? { ...(nextChild.workflowSlotResources as Record<string, unknown>) }
+        : {};
+    for (const key of Object.keys(slotResources)) {
+      const index = Number(key);
+      const shouldClear =
+        typeof connection.portIndex === 'number'
+          ? index === connection.portIndex
+          : parentIds[index] === connection.parentId;
+      if (shouldClear) delete slotResources[key];
+    }
+    nextChild.workflowSlotResources = slotResources;
   } else if (child.sourcePortIndices !== undefined) {
     nextChild.sourcePortIndices = nextParentIds.map((parentId) => {
       const originalIndex = parentIds.indexOf(parentId);

@@ -123,9 +123,10 @@ export function createCanvasAssetInsertion(get: () => Options, runtime: Runtime 
       epoch = start.getWorkflowEpoch(),
       bounds = start.canvasRef.current?.getBoundingClientRect();
     if (disposed || !start.enabled || !bounds) return;
+    const batchIndex = library ? Math.max(0, importing.size - 1) : 0;
     const point = {
-      x: (bounds.width / 2 - start.viewport.x) / start.viewport.zoom - 170,
-      y: (bounds.height / 2 - start.viewport.y) / start.viewport.zoom - 150,
+      x: (bounds.width / 2 - start.viewport.x) / start.viewport.zoom - 170 + (batchIndex % 4) * 48,
+      y: (bounds.height / 2 - start.viewport.y) / start.viewport.zoom - 150 + Math.floor(batchIndex / 4) * 48,
     };
     const controller = new AbortController();
     jobs.add(controller);

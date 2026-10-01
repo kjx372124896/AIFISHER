@@ -1,5 +1,7 @@
 import type { CanvasNode } from './canvasNodeOperations';
 import { adaptiveMediaNodeSize, videoDisplayAspectRatio } from '../media/mediaNodeSizing';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
 
 export const nodeTypes = {
   TEXT: 'Text',
@@ -227,6 +229,10 @@ export function nodeMediaKind(value: CanvasNode | string): MediaKind {
       ) || 'other'
     );
   const type = typeof value === 'string' ? value : value.type;
+  if (typeof value !== 'string') {
+    const resource = getCanvasPluginNodeDefinition(type)?.resource?.(toPluginNode(value as any));
+    if (resource?.kind && resource.kind !== 'bundle') return resource.kind;
+  }
   if (type === 'Text') return 'text';
   if (['Image', 'Upload Image', 'Image Compare', 'Image Composite', 'ComfyUI'].includes(type))
     return 'image';

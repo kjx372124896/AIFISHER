@@ -1,7 +1,7 @@
 /**
  * sourceSettings.ts
  *
- * 设置页「闭源服务」的连接结构：AIFISHER API / RH CN / RH AI / 厂商直连。
+ * 设置页「闭源服务」的连接结构：RH CN / RH AI / 厂商直连。
  *
  * 稳定版原来是一长串按厂商排的密钥卡，看不出"填了这个密钥点亮了什么"。
  * 各来源卖的是同一批模型，所以设置页以「站 / 厂商」为一级；
@@ -37,8 +37,6 @@ const MEDIA_LABELS: Record<MediaKind, string> = {
 };
 
 const BLOCK_NOTES: Record<string, string> = {
-  relay:
-    '画布账号与 AIFISHER API 站账号不互通。请先在 API 站单独注册、登录并创建 API Key，再粘贴到这里保存。',
   // RH 两个站是两个账号：各自注册、各自充值、各自 API Key，余额不互通。
   // 「全能图片」标准模型系列已从 CN 站下线迁到 RH AI站。
   runninghub_global:
@@ -49,13 +47,10 @@ const BLOCK_NOTES: Record<string, string> = {
 };
 
 function blockNote(block: SourceBlock) {
-  if (block.source === 'relay' && block.accountManaged) {
-    return 'API 站账号需单独注册，与画布账号不互通。绑定状态由当前 AIFISHER 账号统一管理，无需在设置页重复填写。';
-  }
   return BLOCK_NOTES[block.source] ?? '';
 }
 
-const SOURCE_ORDER = ['relay', 'runninghub', 'runninghub_global', 'official'] as const;
+const SOURCE_ORDER = ['runninghub', 'runninghub_global', 'official'] as const;
 const DIRECT_VENDOR_ORDER = ['豆包', 'Kimi', 'DeepSeek', '智谱 GLM', 'OpenAI'] as const;
 const DREAMINA_CLI_INSTALL_COMMAND = 'curl -fsSL https://jimeng.jianying.com/cli | bash';
 const DREAMINA_LOGIN_ORIGIN = 'https://jimeng.jianying.com';
@@ -109,11 +104,6 @@ function isOfficialDreaminaLoginUrl(value: string | undefined, userCode: string 
  * 没登记的键名不吞掉：后端加了新厂商，这里也要能填，只是没有中文名和链接。
  */
 const SECRET_META: Record<string, { vendor: string; label: string; link?: string }> = {
-  RELAY_API_KEY: {
-    vendor: 'AIFISHER API',
-    label: 'API Key',
-    link: 'https://api.work-fisher.com/',
-  },
   RUNNINGHUB_API_KEY: {
     vendor: 'RH CN站',
     label: 'API Key',
@@ -883,7 +873,6 @@ function renderBlock(
   const heading = document.createElement('div');
   heading.className = 'flex items-center gap-3';
   heading.append(textElement('h3', block.label, 'text-[var(--af-text)] text-xl font-bold'));
-  if (block.source === 'relay') heading.append(badge('核心推荐', 'accent'));
   const configurationBadge =
     configuredCount === block.secrets.length
       ? badge('已配置', 'on')
@@ -893,9 +882,6 @@ function renderBlock(
         );
   configurationBadge.setAttribute('data-fisherai-source-status', 'true');
   heading.append(configurationBadge);
-  if (block.accountManaged && block.singleKey && vendors[0]?.link) {
-    heading.append(vendorLink(vendors[0].link));
-  }
 
   const header = document.createElement('div');
   header.className = 'min-w-0 space-y-1 text-left';
@@ -937,25 +923,7 @@ function renderBlock(
 
   const keys = document.createElement('div');
   keys.className = 'space-y-3';
-  if (block.source === 'relay' && block.accountManaged) {
-    const managed = document.createElement('div');
-    managed.setAttribute('data-fisherai-relay-account-managed', 'true');
-    managed.className =
-      'rounded-lg border border-[var(--af-border)] bg-[var(--af-input)] px-5 py-4';
-    const bound = block.secrets.some((secret) => secret.configured);
-    managed.append(
-      textElement(
-        'p',
-        bound
-          ? '当前 AIFISHER 账号已绑定中转 API，画布中可直接选择 AIFISHER API 来源。'
-          : '请在画布右上角「余额与活动」中绑定中转 API Key。',
-        bound
-          ? 'text-sm leading-6 text-[var(--af-text-secondary)]'
-          : 'text-sm leading-6 text-[var(--af-warning)]',
-      ),
-    );
-    keys.append(managed);
-  } else if (block.source === 'official') {
+  if (block.source === 'official') {
     keys.append(dreaminaCliVendor(client, scope));
     keys.append(libTvCliVendor(client, scope));
     for (const group of vendors)
@@ -965,7 +933,7 @@ function renderBlock(
       const vendor = document.createElement('div');
       vendor.className = 'space-y-3';
       vendor.setAttribute('data-fisherai-source-vendor', group.vendor);
-      // 单密钥的站不再重复一遍站名——标题已经写着「AIFISHER API」了。
+      // 单密钥的站不再重复一遍站名。
       if (!block.singleKey) {
         const vendorRow = document.createElement('div');
         vendorRow.className = 'flex items-center gap-3';
@@ -990,7 +958,7 @@ function renderBlock(
   if (block.source !== 'official')
     body.append(modelCatalogDisclosure(block.media, saveConfiguration));
 
-  if (!block.accountManaged) {
+  {
     const footer = document.createElement('div');
     footer.className = 'flex items-center gap-4';
     const save = document.createElement('button');
@@ -1056,15 +1024,6 @@ function updateBlockMetadata(card: HTMLElement, block: SourceBlock) {
           ? `已配置 ${count}/${block.secrets.length}`
           : '未配置';
     status.className = badge('', count === block.secrets.length ? 'on' : 'off').className;
-  }
-  const managed = card.querySelector('[data-fisherai-relay-account-managed] p');
-  if (managed) {
-    managed.textContent = count
-      ? '当前 AIFISHER 账号已绑定中转 API，画布中可直接选择 AIFISHER API 来源。'
-      : '请在画布右上角「余额与活动」中绑定中转 API Key。';
-    managed.className = count
-      ? 'text-sm leading-6 text-[var(--af-text-secondary)]'
-      : 'text-sm leading-6 text-[var(--af-warning)]';
   }
   for (const group of groupByVendor(block.secrets)) {
     const vendor = [...card.querySelectorAll<HTMLElement>('[data-fisherai-source-vendor]')].find(
@@ -1135,6 +1094,7 @@ export function mountSourceSettings(host: HTMLElement, client: SourceSettingsCli
         const sorted = blocks
           // 即梦使用厂商直连里的专用登录卡，完整来源数据仍供助手使用。
           .filter((block) => !['dreamina_cli', 'libtv_cli'].includes(block.source))
+          .filter((block) => !block.source.startsWith('custom:'))
           .map((block, index) => ({ block, index }))
           .sort(
             (a, b) =>
@@ -1162,9 +1122,6 @@ export function mountSourceSettings(host: HTMLElement, client: SourceSettingsCli
       });
   };
   retry.addEventListener('click', load);
-  const refresh = () => load();
-  window.addEventListener('aifisher:relay-binding-changed', refresh);
-  scope.onDispose(() => window.removeEventListener('aifisher:relay-binding-changed', refresh));
   load();
   return () => {
     scope.dispose();

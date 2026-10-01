@@ -4,6 +4,9 @@ import { newNodeDimensions } from './nodeCreationDimensions';
 import { installStableCanvasClipboard } from '../canvas/canvasClipboard';
 import { connectCanvasNodes, type CanvasConnectionNode } from '../canvas/canvasConnections';
 import type { CanvasViewport } from '../canvas/canvasNavigation';
+import { getCanvasPluginNodeDefinition } from '../plugins/canvasPluginRegistry';
+import { toPluginNode } from '../plugins/canvasPluginHost';
+import { getDefaultModel } from '../settings/defaultModelPreferences';
 
 export interface CanvasNode extends CanvasConnectionNode {
   x: number;
@@ -67,10 +70,25 @@ export function createCanvasNode(
   point: { x: number; y: number },
   projectId?: string,
 ): CanvasNode {
-  const image = runtime.imageModels[0],
-    video = runtime.videoModels[0];
+  const pluginDefinition = getCanvasPluginNodeDefinition(type);
+  if (pluginDefinition) {
+    return installNodeFramework().createFresh({
+      id: runtime.createId(),
+      type,
+      ...point,
+      title: pluginDefinition.title,
+      width: pluginDefinition.defaultSize.width,
+      height: pluginDefinition.defaultSize.height,
+      status: 'idle',
+      parentIds: [],
+      pluginMetadata: { ...(pluginDefinition.defaultMetadata || {}) },
+      projectId: projectId || undefined,
+    }) as CanvasNode;
+  }
+  const image = getDefaultModel('image', runtime.imageModels),
+    video = getDefaultModel('video', runtime.videoModels);
   const audio = runtime.audioModels[0],
-    text = runtime.textModels[0];
+    text = getDefaultModel('text', runtime.textModels);
   const upload = ['Upload Image', 'Upload Video', 'Upload Audio'].includes(type);
   const model =
     type === 'Image'
@@ -239,6 +257,56 @@ export function connectNewCanvasNode(
   if (target.kind === 'workflow') {
     const workflow = window.__FISHERAI_WORKFLOW_NODES__;
     if (!workflow) return nodes;
+    const pluginResource = getCanvasPluginNodeDefinition(source.type)?.resource?.(
+      toPluginNode(source as any),
+    );
+    if (pluginResource?.kind === 'bundle' && pluginResource.items.length) {
+      const slots = workflow.getInputSlots(target);
+      const targetParents = [...(target.parentIds ?? [])];
+      const reserved = new Set(
+        slots
+          .filter((slot) => Boolean(targetParents[slot.slotIndex]))
+          .map((slot) => slot.slotIndex),
+      );
+      const items = [...pluginResource.items]
+        .map((item, index) => ({
+          ...item,
+          order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
+          sourcePortIndex: index,
+        }))
+        .sort((left, right) => Number(left.order) - Number(right.order));
+      const compatible = (sourceKind: string, targetKind: string) =>
+        sourceKind === targetKind || (sourceKind === 'image' && targetKind === 'mask');
+      const assignments: Array<{ slotIndex: number; sourcePortIndex: number }> = [];
+      for (const item of items) {
+        const slot = slots
+          .filter((candidate) => !reserved.has(candidate.slotIndex))
+          .filter((candidate) => compatible(item.kind, candidate.mediaKind))
+          .filter((candidate) =>
+            item.kind === 'text'
+              ? candidate.source === 'parameter'
+              : candidate.source === 'input-port',
+          )
+          .sort((left, right) => left.slotIndex - right.slotIndex)[0];
+        if (!slot) continue;
+        assignments.push({ slotIndex: slot.slotIndex, sourcePortIndex: item.sourcePortIndex });
+        reserved.add(slot.slotIndex);
+      }
+      if (!assignments.length) return nodes;
+      let next = nodes;
+      const capacity = workflow.getInputCapacity(target);
+      for (const assignment of assignments) {
+        next = connectCanvasNodes(next, {
+          parentId: sourceId,
+          childId: targetId,
+          sourcePortIndex: assignment.sourcePortIndex,
+          portIndex: assignment.slotIndex,
+          inputCount: capacity,
+          connectionMode: 'fisherai-workflow',
+        });
+      }
+      return next;
+    }
     port = workflow.resolveAvailableInputSlot(target, source, sourcePort);
     if (port < 0 || !workflow.canConnect(target, source, port, sourcePort)) return nodes;
     count = workflow.getInputCapacity(target);

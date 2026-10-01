@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,37 @@ function run(file, args, cwd = root) {
     });
   });
 }
+
+async function ensureElectronRuntime() {
+  const electronRoot = path.join(root, 'apps', 'desktop', 'node_modules', 'electron');
+  const electronDist = path.join(electronRoot, 'dist');
+  const electronExecutable = path.join(electronDist, 'electron.exe');
+  try {
+    await access(electronExecutable);
+    console.log(`Electron runtime ready: ${electronDist}`);
+    return;
+  } catch {}
+
+  const installer = path.join(electronRoot, 'install.js');
+  try {
+    await access(installer);
+  } catch {
+    throw new Error(
+      'Electron 依赖未安装。请先在项目根目录执行 npm ci，然后重新运行 npm run desktop:installer',
+    );
+  }
+
+  console.log('Electron runtime missing; downloading it automatically...');
+  await run(process.execPath, [installer]);
+  try {
+    await access(electronExecutable);
+  } catch {
+    throw new Error(`Electron runtime 安装完成后仍未找到：${electronExecutable}`);
+  }
+  console.log(`Electron runtime ready: ${electronDist}`);
+}
+
+await ensureElectronRuntime();
 
 await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(appRoot, { recursive: true });

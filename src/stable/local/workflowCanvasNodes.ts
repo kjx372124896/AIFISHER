@@ -1006,7 +1006,17 @@ export function buildWorkflowCanvasValues(
         if (slot.required && !text.trim()) throw new Error(`${slot.label}连接的优化提示词为空`);
         values[slot.bindingKey] = text;
       } else {
-        const asset = localAssetReference(bundleItem.url, projectId, slot.mediaKind);
+        const assetId =
+          typeof bundleItem.assetId === 'string' &&
+          bundleItem.assetId.length > 0 &&
+          bundleItem.assetId.length <= 200 &&
+          !/[\\/\0\r\n]/.test(bundleItem.assetId)
+            ? bundleItem.assetId
+            : undefined;
+        const asset =
+          assetId && bundleItem.projectId === projectId
+            ? { assetId, projectId, type: slot.mediaKind }
+            : localAssetReference(bundleItem.url, projectId, slot.mediaKind);
         if (!asset) throw new Error(`${slot.label}需要当前项目内的${slot.mediaKind}素材`);
         grouped.set(slot.bindingKey, [...(grouped.get(slot.bindingKey) || []), asset]);
       }

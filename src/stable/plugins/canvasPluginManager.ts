@@ -34,12 +34,12 @@ export function mountCanvasPluginManager(host: HTMLElement) {
   const title = text('h3', '画布插件', 'text-xl font-bold text-[var(--af-text)]');
   const intro = text(
     'p',
-    '兼容 Infinite Canvas 画布插件格式。插件代码会直接运行在画布页面中，请只安装可信来源。',
+    '支持普通插件 JS URL、GitHub 仓库、GitHub 子目录、blob 文件和 raw 链接。GitHub 来源可直接点击“更新”重新拉取最新版。插件代码会直接运行在画布页面中，请只安装可信来源。',
     'text-sm text-[var(--af-text-muted)]',
   );
   const installRow = document.createElement('div');
   installRow.className = 'flex gap-2';
-  const url = input('粘贴插件 JS URL，例如 https://.../plugin.js');
+  const url = input('粘贴插件 JS URL 或 GitHub 链接，例如 https://github.com/owner/repo');
   const install = button('安装插件', true);
   const status = text('div', '', 'text-xs text-[var(--af-text-muted)]');
   installRow.append(url, install);
@@ -75,6 +75,11 @@ export function mountCanvasPluginManager(host: HTMLElement) {
           'div',
           record.description || record.url,
           'mt-1 truncate text-xs text-[var(--af-text-muted)]',
+        ),
+        text(
+          'div',
+          record.sourceKind === 'github' ? `GitHub · ${record.url}` : record.url,
+          'mt-1 truncate text-[11px] text-[var(--af-text-faint)]',
         ),
       );
       const toggle = button(record.enabled ? '停用' : '启用');
@@ -116,7 +121,7 @@ export function mountCanvasPluginManager(host: HTMLElement) {
   install.addEventListener('click', async () => {
     const value = url.value.trim();
     if (!value) {
-      status.textContent = '请输入插件 JS URL';
+      status.textContent = '请输入插件 JS URL 或 GitHub 链接';
       return;
     }
     install.disabled = true;

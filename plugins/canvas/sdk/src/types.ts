@@ -137,6 +137,8 @@ export type CanvasNodeResourceItem = {
     kind: CanvasResourceKind;
     text?: string;
     url?: string;
+    assetId?: string;
+    projectId?: string;
     sourceNodeId?: string;
     order?: number;
 };

@@ -35,6 +35,8 @@ export type PluginResourceItem = {
   kind: 'text' | 'image' | 'video' | 'audio';
   text?: string;
   url?: string;
+  assetId?: string;
+  projectId?: string;
   sourceNodeId?: string;
   order?: number;
 };
@@ -126,7 +128,11 @@ export type InstalledCanvasPlugin = {
   name: string;
   version: string;
   description?: string;
+  /** 用户安装时填写的原始地址。GitHub 仓库链接更新时会从这里重新解析。 */
   url: string;
+  /** 本次成功解析并下载插件源码的实际 JS 地址。 */
+  resolvedUrl?: string;
+  sourceKind?: 'url' | 'github';
   source: string;
   enabled: boolean;
   local?: boolean;

@@ -61,6 +61,8 @@ export function toPluginNode(node: RawNode): PluginNodeData {
           mediaType === 'text'
             ? String(node.textContent || '')
             : String(node.networkUrl || node.resultUrl || ''),
+        assetId: typeof node.assetId === 'string' ? node.assetId : undefined,
+        projectId: typeof node.projectId === 'string' ? node.projectId : undefined,
         status: node.status,
         model: node.model,
       };

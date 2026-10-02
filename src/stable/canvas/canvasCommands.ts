@@ -158,7 +158,7 @@ export function useCanvasCommands(
         focusOnNodes(nodes, selectedNodeIds);
         return;
       }
-      if (key === 'delete' || key === 'backspace') {
+      if (key === 'delete') {
         if (selectedNodeIds.length) {
           deleteNodes(selectedNodeIds);
           setContextMenu((menu) => ({ ...menu, isOpen: false }));

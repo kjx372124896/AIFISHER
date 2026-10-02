@@ -39,8 +39,14 @@ const update = Object.freeze({
 
 contextBridge.exposeInMainWorld('aifisherDesktop', {
   version: ipcRenderer.sendSync('desktop:version'),
-  integratedTitleBar: true,
+  integratedTitleBar: false,
   update,
+  library: {
+    status: () => invoke('library:status'),
+    select: () => invoke('library:select'),
+    reset: () => invoke('library:reset'),
+    open: () => invoke('library:open'),
+  },
   setTheme: (theme) => {
     if (theme !== 'dark' && theme !== 'light') return Promise.reject(new Error('INVALID_THEME'));
     return invoke('desktop:set-theme', theme);

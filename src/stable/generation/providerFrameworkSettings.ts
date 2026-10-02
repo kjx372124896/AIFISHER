@@ -501,8 +501,13 @@ function renderModels(
     for (const upstreamModelId of ui.discoveredModels) {
       const row = document.createElement('div');
       row.className =
-        'grid items-center gap-3 border-b border-[var(--af-border)] px-5 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_120px_220px_auto]';
-      const modelName = textElement('code', upstreamModelId, 'truncate text-xs text-[var(--af-text)]');
+        'grid items-start gap-3 border-b border-[var(--af-border)] px-5 py-3 last:border-b-0 lg:grid-cols-[minmax(240px,1.4fr)_120px_220px_auto]';
+      const modelName = textElement(
+        'code',
+        upstreamModelId,
+        'min-w-0 whitespace-normal break-all text-xs leading-5 text-[var(--af-text)]',
+      );
+      modelName.title = upstreamModelId;
       const capability = selectField(
         (Object.keys(CAPABILITY_LABEL) as Capability[]).map((value) => ({
           label: CAPABILITY_LABEL[value],

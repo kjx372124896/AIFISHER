@@ -12,7 +12,7 @@ const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
 // The host fills the whole window behind the WebContentsView. A drag region on
 // html/body intercepts native mouse input even over that child view on Windows.
 const TITLE_STRIP_URL = `data:text/html;charset=utf-8,${encodeURIComponent(
-  `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:${DEFAULT_SURFACE};user-select:none}.title-strip{height:${TITLE_BAR_HEIGHT}px;-webkit-app-region:drag}</style></head><body><div class="title-strip"></div></body></html>`,
+  `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:${DEFAULT_SURFACE};user-select:none}.title-strip{height:${CANVAS_TITLE_BAR_HEIGHT}px;-webkit-app-region:drag}</style></head><body><div class="title-strip"></div></body></html>`,
 )}`;
 
 export function isAppUrl(value) {
@@ -92,16 +92,20 @@ export function createMainWindow({
   window.contentView.addChildView(view);
   let canvasChrome = false;
   const applyTitleStrip = () => {
-    void window.webContents.executeJavaScript(`document.querySelector('.title-strip')?.style.setProperty('display', '${canvasChrome ? 'none' : 'block'}')`).catch(() => {});
+    // Keep a dedicated native title strip above the renderer. Windows caption
+    // buttons are always above web content when titleBarOverlay is used, so
+    // letting the canvas extend underneath them can cover fullscreen/editor UI.
+    void window.webContents.executeJavaScript(`document.querySelector('.title-strip')?.style.setProperty('display', 'block')`).catch(() => {});
   };
   window.webContents.on('dom-ready', applyTitleStrip);
   const layout = () => {
     const { width, height } = window.getContentBounds();
+    const titleHeight = CANVAS_TITLE_BAR_HEIGHT;
     view.setBounds({
       x: 0,
-      y: canvasChrome ? 0 : TITLE_BAR_HEIGHT,
+      y: titleHeight,
       width,
-      height: Math.max(0, height - (canvasChrome ? 0 : TITLE_BAR_HEIGHT)),
+      height: Math.max(0, height - titleHeight),
     });
   };
   layout();
@@ -115,7 +119,7 @@ export function createMainWindow({
     canvasChrome = isCanvasUrl(url);
     if (changed) applyTitleStrip();
     layout();
-    window.setTitleBarOverlay({ color: surface, symbolColor: currentTheme === 'light' ? LIGHT_WINDOW_SYMBOL_COLOR : WINDOW_SYMBOL_COLOR, height: canvasChrome ? CANVAS_TITLE_BAR_HEIGHT : TITLE_BAR_HEIGHT });
+    window.setTitleBarOverlay({ color: surface, symbolColor: currentTheme === 'light' ? LIGHT_WINDOW_SYMBOL_COLOR : WINDOW_SYMBOL_COLOR, height: CANVAS_TITLE_BAR_HEIGHT });
   };
   if (nativeTheme) nativeTheme.themeSource = 'dark';
   const paint = (color, theme = 'dark') => {
@@ -127,7 +131,7 @@ export function createMainWindow({
     window.setTitleBarOverlay({
       color,
       symbolColor: theme === 'light' ? LIGHT_WINDOW_SYMBOL_COLOR : WINDOW_SYMBOL_COLOR,
-      height: canvasChrome ? CANVAS_TITLE_BAR_HEIGHT : TITLE_BAR_HEIGHT,
+      height: CANVAS_TITLE_BAR_HEIGHT,
     });
     view.setBackgroundColor(color);
     const script = `document.documentElement.style.background = document.body.style.background = ${JSON.stringify(color)}; document.documentElement.style.colorScheme = ${JSON.stringify(theme)}`;

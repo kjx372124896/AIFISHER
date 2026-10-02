@@ -9,6 +9,7 @@ import { mountProviderFrameworkSettings } from '../generation/providerFrameworkS
 import { mountLocalRuntimeSettings } from '../local/localRuntimeSettings';
 import { createLocalRuntimeClient } from '../local/localRuntimeClient';
 import { mountMediaDownloadSettings } from '../media/mediaDownloadSettings';
+import { mountAssetLibraryLocationSettings } from '../media/assetLibraryLocationSettings';
 import { installMediaDownloadFileName } from '../media/mediaDownloadFileName';
 import { mountLocalUpdateSettings } from '../update/localUpdateSettings';
 import { CanvasAppearanceSettings } from '../appearance/CanvasAppearanceSettings';
@@ -81,8 +82,14 @@ export function CanvasSettings(
         pageDisposeRef.current = mountSourceSettings(host, createSourceSettingsClient());
       else if (section === 'custom-providers')
         pageDisposeRef.current = mountProviderFrameworkSettings(host);
-      else if (section === 'storage')
-        pageDisposeRef.current = mountMediaDownloadSettings(host, installMediaDownloadFileName());
+      else if (section === 'storage') {
+        const disposeLibrary = mountAssetLibraryLocationSettings(host);
+        const disposeDownloads = mountMediaDownloadSettings(host, installMediaDownloadFileName());
+        pageDisposeRef.current = () => {
+          disposeDownloads();
+          disposeLibrary();
+        };
+      }
       else if (section === 'plugins')
         pageDisposeRef.current = mountCanvasPluginManager(host);
       else if (section === 'local-service')

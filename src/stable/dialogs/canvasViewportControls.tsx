@@ -305,7 +305,7 @@ export function CanvasViewportControls(React: Runtime, props: Props, components:
                       'px-2 py-1 bg-[var(--af-surface-raised)] rounded border border-[var(--af-border-control)] text-xs text-[var(--af-info)] font-mono'
                     }
                   >
-                    {'Del / Backspace'}
+                    {'Del'}
                   </kbd>
                 </div>
                 <div

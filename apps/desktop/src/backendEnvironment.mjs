@@ -90,6 +90,7 @@ export async function createBackendEnvironment({
   userId,
   pipe,
   helpers,
+  libraryDirectory = null,
   baseEnvironment = process.env,
 }) {
   if (!OPAQUE_USER_ID.test(String(userId)) || userId === '00000000-0000-0000-0000-000000000000') {
@@ -138,7 +139,7 @@ export async function createBackendEnvironment({
     NODE_ENV: 'production',
     FISHERAI_APP_DIR: installation.code,
     FISHERAI_DATA_DIR: installation.data,
-    FISHERAI_LIBRARY_DIR: path.join(userRoot, 'library'),
+    FISHERAI_LIBRARY_DIR: libraryDirectory ? path.resolve(libraryDirectory) : path.join(userRoot, 'library'),
     FISHERAI_LOGS_DIR: installation.logs,
     FISHERAI_ENV_PATH: providerEnvironmentPath,
     FISHERAI_PROVIDER_CREDENTIAL_PATH: credentialPath,

@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_SCHEME, APP_SCHEME_PRIVILEGES, createAppProtocolHandler } from './appProtocol.mjs';
 import { createBackendEnvironment, loadReleaseHelpers } from './backendEnvironment.mjs';
+import { migrateLibrary, readLibraryLocation, writeLibraryLocation } from './libraryLocation.mjs';
 import { createBackendSupervisor } from './backendSupervisor.mjs';
 import { releasePaths, resolveInstallation } from './installation.mjs';
 import { createTray } from './tray.mjs';
@@ -160,6 +161,90 @@ function applyUpdate() {
   return updateHandoff;
 }
 
+
+
+async function restartBackendForLibraryChange() {
+  const userId = localWorkspaceId || backend?.userId();
+  if (!userId) throw new Error('本机工作区尚未就绪。');
+  keepCanvasAlive(false);
+  await backend.stop();
+  await backend.start(userId);
+  keepCanvasAlive(true);
+  return readLibraryLocation(installation, userId);
+}
+
+async function selectLibraryDirectory() {
+  const userId = localWorkspaceId || backend?.userId();
+  if (!userId) throw new Error('本机工作区尚未就绪。');
+  const current = await readLibraryLocation(installation, userId);
+  const selected = await dialog.showOpenDialog(mainWindow, {
+    title: '选择 AIFISHER 资产库目录',
+    defaultPath: current.directory,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (selected.canceled || !selected.filePaths[0]) return { ...current, changed: false };
+
+  const nextDirectory = path.resolve(selected.filePaths[0]);
+  if (nextDirectory === path.resolve(current.directory)) return { ...current, changed: false };
+
+  const choice = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '切换资产库目录',
+    message: '是否把当前资产库内容复制到新目录？',
+    detail: '选择“迁移并切换”会先停止本地服务、复制现有资产，再使用新目录。选择“仅切换”不会移动旧资产。',
+    buttons: ['迁移并切换', '仅切换', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+  });
+  if (choice.response === 2) return { ...current, changed: false };
+
+  keepCanvasAlive(false);
+  await backend.stop();
+  try {
+    if (choice.response === 0) await migrateLibrary(current.directory, nextDirectory);
+    await writeLibraryLocation(installation, nextDirectory);
+    await backend.start(userId);
+    keepCanvasAlive(true);
+    return { ...(await readLibraryLocation(installation, userId)), changed: true };
+  } catch (error) {
+    try { await backend.start(userId); keepCanvasAlive(true); } catch {}
+    throw error;
+  }
+}
+
+async function resetLibraryDirectory() {
+  const userId = localWorkspaceId || backend?.userId();
+  if (!userId) throw new Error('本机工作区尚未就绪。');
+  const current = await readLibraryLocation(installation, userId);
+  if (!current.custom) return { ...current, changed: false };
+
+  const choice = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '恢复默认资产库目录',
+    message: '是否把当前资产复制回默认目录？',
+    detail: '选择“迁移并恢复”会复制当前资产后切回默认目录；“仅恢复”只切换目录。',
+    buttons: ['迁移并恢复', '仅恢复', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+  });
+  if (choice.response === 2) return { ...current, changed: false };
+
+  keepCanvasAlive(false);
+  await backend.stop();
+  try {
+    if (choice.response === 0) await migrateLibrary(current.directory, current.defaultDirectory);
+    await writeLibraryLocation(installation, null);
+    await backend.start(userId);
+    keepCanvasAlive(true);
+    return { ...(await readLibraryLocation(installation, userId)), changed: true };
+  } catch (error) {
+    try { await backend.start(userId); keepCanvasAlive(true); } catch {}
+    throw error;
+  }
+}
+
 function registerIpc() {
   ipcMain.on('desktop:version', (event) => {
     event.returnValue = productVersion;
@@ -187,6 +272,20 @@ function registerIpc() {
   handle('update:reset-source', () => updates.setSource(null));
   handle('update:apply', () => applyUpdate());
   handle('backend:current-state', () => backendView());
+  handle('library:status', async () => {
+    const userId = localWorkspaceId || backend?.userId();
+    if (!userId) throw new Error('本机工作区尚未就绪。');
+    return readLibraryLocation(installation, userId);
+  });
+  handle('library:select', () => selectLibraryDirectory());
+  handle('library:reset', () => resetLibraryDirectory());
+  handle('library:open', async () => {
+    const userId = localWorkspaceId || backend?.userId();
+    if (!userId) throw new Error('本机工作区尚未就绪。');
+    const current = await readLibraryLocation(installation, userId);
+    await shell.openPath(current.directory);
+    return current;
+  });
   handle('desktop:show-item-in-folder', (target) => shell.showItemInFolder(target));
 }
 
@@ -211,8 +310,10 @@ async function start() {
     entry: installation.server,
     cwd: installation.code,
     logsDirectory: installation.logs,
-    createEnvironment: ({ userId, pipe }) =>
-      createBackendEnvironment({ installation, userId, pipe, helpers }),
+    createEnvironment: async ({ userId, pipe }) => {
+      const library = await readLibraryLocation(installation, userId);
+      return createBackendEnvironment({ installation, userId, pipe, helpers, libraryDirectory: library.directory });
+    },
   });
   backend.onState(onBackendState);
   const { autoUpdater } = updaterPackage;

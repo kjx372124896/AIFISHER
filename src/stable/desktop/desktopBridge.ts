@@ -6,6 +6,12 @@ export interface AifisherDesktopBridge {
   readonly integratedTitleBar?: boolean;
   /** Optional for older desktop shells; only affects native chrome, not stored preferences. */
   setTheme?(theme: 'dark' | 'light'): Promise<void>;
+  library?: {
+    status(): Promise<{ directory: string; defaultDirectory: string; custom: boolean; changed?: boolean }>;
+    select(): Promise<{ directory: string; defaultDirectory: string; custom: boolean; changed?: boolean }>;
+    reset(): Promise<{ directory: string; defaultDirectory: string; custom: boolean; changed?: boolean }>;
+    open(): Promise<{ directory: string; defaultDirectory: string; custom: boolean; changed?: boolean }>;
+  };
   update: {
     status(): Promise<DesktopUpdateEvent>;
     prepare(): Promise<DesktopUpdateEvent>;

@@ -69,7 +69,10 @@ export async function refreshDynamicProviderModels(fetcher: typeof fetch = windo
       maxInputs: 10,
       supportedReferenceTypes: model.capability === 'text' ? ['text', 'image'] : ['text', 'image'],
       resolutions: model.capability === 'video' ? ['480p', '720p', '1080p'] : model.capability === 'image' ? ['512', '1K', '2K', '4K'] : [],
-      aspectRatios: model.capability === 'text' || model.capability === 'audio' ? [] : ['1:1', '2:3', '3:2', '9:16', '16:9', '3:4', '4:3'],
+      aspectRatios: model.capability === 'text' || model.capability === 'audio' ? [] : [
+        '1:1', '2:3', '3:2', '9:16', '16:9', '3:4', '4:3', '5:4', '4:5', '21:9',
+        '1:4', '1:8', '4:1', '8:1', '2:1',
+      ],
       cost: 0,
       ...(model.capability === 'text' ? { languageModes: modeConfig } : {}),
       ...(model.capability === 'image' ? { imageModes: modeConfig } : {}),

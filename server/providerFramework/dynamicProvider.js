@@ -141,18 +141,67 @@ async function generateText(params) {
   return { text: text.trim() };
 }
 
-function openAiImageBody(params, model) {
-  const count = Math.max(1, Number(params.generateCount) || 1);
-  const size = params.size || ({
-    '1:1': '1024x1024',
-    '2:3': '1024x1536',
-    '3:2': '1536x1024',
-    '9:16': '1024x1536',
-    '16:9': '1536x1024',
-  }[params.aspectRatio] || undefined);
+const GPT_WEB_BASE_SIZE_MAP = Object.freeze({
+  '1:1': [1254, 1254],
+  '2:3': [1024, 1536],
+  '3:2': [1536, 1024],
+  '9:16': [941, 1672],
+  '16:9': [1672, 941],
+  '3:4': [1086, 1448],
+  '4:3': [1448, 1086],
+  '5:4': [1402, 1122],
+  '4:5': [1122, 1402],
+  '21:9': [1915, 821],
+  '1:4': [626, 2508],
+  '1:8': [443, 3544],
+  '4:1': [2508, 626],
+  '8:1': [3544, 443],
+  '2:1': [1773, 887],
+});
+
+const CUSTOM_IMAGE_RESOLUTION_SCALE = Object.freeze({
+  '512': 0.5,
+  '1K': 1,
+  '2K': 2,
+  '4K': 4,
+});
+
+function normalizePixel(value) {
+  return Math.max(1, Math.round(Number(value)));
+}
+
+export function resolveOpenAiImageSize(params = {}) {
+  if (params.size) return String(params.size);
+
+  const aspectRatio = String(params.aspectRatio || '1:1');
+  const base = GPT_WEB_BASE_SIZE_MAP[aspectRatio] || GPT_WEB_BASE_SIZE_MAP['1:1'];
+  const resolution = String(params.resolution || '1K').toUpperCase();
+  const scale = CUSTOM_IMAGE_RESOLUTION_SCALE[resolution] || 1;
+  const width = normalizePixel(base[0] * scale);
+  const height = normalizePixel(base[1] * scale);
+  return `${width}x${height}`;
+}
+
+export function buildImagePromptWithControls(params = {}, countOverride) {
+  const count = Math.max(1, Math.trunc(Number(countOverride ?? params.generateCount) || 1));
+  const aspectRatio = String(params.aspectRatio || '1:1');
+  const size = resolveOpenAiImageSize(params);
+  const prompt = String(params.prompt || '').trim();
+  const controlText = [
+    '输出要求：',
+    `- 画面比例：${aspectRatio}`,
+    `- 生成数量：${count}`,
+    `- 目标尺寸：${size}`,
+  ].join('\n');
+  return prompt ? `${prompt}\n\n${controlText}` : controlText;
+}
+
+export function openAiImageBody(params, model, countOverride) {
+  const count = Math.max(1, Math.trunc(Number(countOverride ?? params.generateCount) || 1));
+  const size = resolveOpenAiImageSize(params);
   return {
     model: model.upstreamModelId,
-    prompt: String(params.prompt || ''),
+    prompt: buildImagePromptWithControls(params, count),
     n: count,
     ...(size ? { size } : {}),
     ...(params.quality ? { quality: params.quality } : {}),
@@ -174,35 +223,47 @@ async function generateImage(params) {
   const { provider, protocol, model } = runtimeFor(params);
   if (protocol.adapter === 'openai-images') {
     const images = BaseProvider.resolveInputImages(params.images || params.imageBase64 || []);
+    const desiredCount = Math.max(1, Math.trunc(Number(params.generateCount) || 1));
     if (params.imageMode === 'image-to-image' && images.length) {
       const source = await BaseProvider.asyncDownloadToBuffer(images[0], params.useProxy, { signal: params.signal });
-      const form = new FormData();
-      const fields = openAiImageBody(params, model);
-      for (const [key, value] of Object.entries(fields)) {
-        if (value !== undefined && value !== null) form.append(key, String(value));
+      const entries = [];
+      while (entries.length < desiredCount) {
+        const remaining = desiredCount - entries.length;
+        const form = new FormData();
+        const fields = openAiImageBody(params, model, remaining);
+        for (const [key, value] of Object.entries(fields)) {
+          if (value !== undefined && value !== null) form.append(key, String(value));
+        }
+        form.append('image', new Blob([source], { type: 'image/png' }), 'image.png');
+        const result = await fetchJson(joinUrl(provider.baseUrl, protocol.editPath || '/v1/images/edits'), {
+          method: 'POST',
+          headers: {
+            ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+            ...(provider.headers || {}),
+          },
+          body: form,
+          signal: params.signal,
+        }, params);
+        const batch = Array.isArray(result?.data) ? result.data : [];
+        if (!batch.length) throw new Error('图片编辑接口没有返回 data');
+        entries.push(...batch.slice(0, remaining));
       }
-      form.append('image', new Blob([source], { type: 'image/png' }), 'image.png');
-      const result = await fetchJson(joinUrl(provider.baseUrl, protocol.editPath || '/v1/images/edits'), {
-        method: 'POST',
-        headers: {
-          ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-          ...(provider.headers || {}),
-        },
-        body: form,
-        signal: params.signal,
-      }, params);
-      const entries = Array.isArray(result?.data) ? result.data : [];
-      if (!entries.length) throw new Error('图片编辑接口没有返回 data');
       return Promise.all(entries.map((entry) => imageResultToBuffer(entry, params)));
     }
-    const result = await fetchJson(joinUrl(provider.baseUrl, protocol.createPath), {
-      method: 'POST',
-      headers: headers(provider, protocol),
-      body: JSON.stringify(openAiImageBody(params, model)),
-      signal: params.signal,
-    }, params);
-    const entries = Array.isArray(result?.data) ? result.data : [];
-    if (!entries.length) throw new Error('图片接口没有返回 data');
+
+    const entries = [];
+    while (entries.length < desiredCount) {
+      const remaining = desiredCount - entries.length;
+      const result = await fetchJson(joinUrl(provider.baseUrl, protocol.createPath), {
+        method: 'POST',
+        headers: headers(provider, protocol),
+        body: JSON.stringify(openAiImageBody(params, model, remaining)),
+        signal: params.signal,
+      }, params);
+      const batch = Array.isArray(result?.data) ? result.data : [];
+      if (!batch.length) throw new Error('图片接口没有返回 data');
+      entries.push(...batch.slice(0, remaining));
+    }
     return Promise.all(entries.map((entry) => imageResultToBuffer(entry, params)));
   }
   return generateDeclarativeMedia('image', params, { provider, protocol, model });
@@ -212,13 +273,16 @@ async function generateDeclarativeMedia(kind, params, runtime = runtimeFor(param
   const { provider, protocol, model } = runtime;
   const context = {
     model: model.upstreamModelId,
-    prompt: String(params.prompt || ''),
+    prompt: kind === 'image'
+      ? buildImagePromptWithControls(params, params.generateCount)
+      : String(params.prompt || ''),
     images: BaseProvider.resolveInputImages(params.images || params.imageBase64 || []),
     videos: (params.videos || []).map(normalizeAsset).filter(Boolean),
     audios: (params.audios || []).map(normalizeAsset).filter(Boolean),
     duration: params.duration,
     aspectRatio: params.aspectRatio,
     resolution: params.resolution,
+    size: kind === 'image' ? resolveOpenAiImageSize(params) : undefined,
     quality: params.quality,
     count: params.generateCount || 1,
     params,

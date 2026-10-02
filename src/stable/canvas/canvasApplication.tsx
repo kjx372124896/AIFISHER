@@ -1528,7 +1528,30 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         getCommonGroup,
         onSaveAsset: handleOpenCreateAsset,
         onAnnotate: handleStartAnnotation,
-        onCrop: handleStartCrop,
+        onCrop: (id: string, mode: 'editor' | 'grid' | 'panorama' | 'angle' | 'panorama-generate' = 'editor') => {
+          if (mode !== 'panorama-generate') {
+            handleStartCrop(id, mode);
+            return;
+          }
+          try {
+            if (!workflowId || view !== 'canvas') throw new Error('请先打开项目。');
+            const result = createImageAngleDraft(getNodes(), id, null, workflowId, {
+              create: createAgentNode,
+              configure: configureAgentNode,
+              connect: connectAgentNodes,
+              width: getNodeWidth,
+            });
+            flushSync(() => {
+              setNodes(result.nodes);
+              setSelectedNodeIds([result.id]);
+            });
+            void handleGenerate(result.id);
+          } catch (cause) {
+            const message = cause instanceof Error ? cause.message : '生成全景图失败，请重试。';
+            console.error('[panorama-generate]', cause);
+            window.alert(message);
+          }
+        },
         onResizeImage: handleStartResize,
         onUpscaleImage: handleUpscaleImage,
         projectId: workflowId || void 0,

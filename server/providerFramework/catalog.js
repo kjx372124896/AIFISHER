@@ -1,6 +1,13 @@
 import { providerFrameworkStore } from './store.js';
 import { protocolById } from './protocols.js';
 
+const DEFAULT_DYNAMIC_IMAGE_ASPECT_RATIOS = Object.freeze([
+  '1:1', '2:3', '3:2', '9:16', '16:9', '3:4', '4:3', '5:4', '4:5', '21:9',
+  '1:4', '1:8', '4:1', '8:1', '2:1',
+]);
+
+const DEFAULT_DYNAMIC_IMAGE_RESOLUTIONS = Object.freeze(['512', '1K', '2K', '4K']);
+
 function modesFor(model, protocol) {
   const supplied = Array.isArray(model.modes) && model.modes.length ? model.modes : null;
   if (supplied) return supplied;
@@ -64,6 +71,12 @@ export function loadDynamicModelCatalog(store = providerFrameworkStore) {
       useProxy: model.useProxy === true,
       maxConcurrent: model.maxConcurrent || 1,
       supportedReferenceTypes: model.capability === 'text' ? ['text', 'image'] : ['text', 'image'],
+      ...(model.capability === 'image'
+        ? {
+            aspectRatios: [...DEFAULT_DYNAMIC_IMAGE_ASPECT_RATIOS],
+            resolutions: [...DEFAULT_DYNAMIC_IMAGE_RESOLUTIONS],
+          }
+        : {}),
       [modeKey(model.capability)]: modes.map((mode) => ({
         label: mode,
         value: mode,

@@ -103,39 +103,70 @@ export function canvasSceneData(
           !Array.isArray(node.workflowSlotResources)
             ? (node.workflowSlotResources as Record<string, unknown>)[String(slotIndex)]
             : undefined;
-        let resource =
+        const stored =
           storedResource && typeof storedResource === 'object' && !Array.isArray(storedResource)
-            ? (storedResource as { kind?: unknown; url?: unknown; text?: unknown })
+            ? (storedResource as Record<string, unknown>)
             : undefined;
-        if (!resource) {
-          const pluginResource = getCanvasPluginNodeDefinition(parent.type)?.resource?.(
-            toPluginNode(parent as any),
-          );
-          if (pluginResource?.kind === 'bundle') {
-            const sourcePortIndex = Math.max(
-              0,
-              Math.trunc(Number(node.sourcePortIndices?.[slotIndex]) || 0),
-            );
-            resource = pluginResource.items[sourcePortIndex];
-          } else if (pluginResource) resource = pluginResource;
-        }
+        const pluginResource = getCanvasPluginNodeDefinition(parent.type)?.resource?.(
+          toPluginNode(parent as any),
+        );
+        const sourcePortIndex = Math.max(
+          0,
+          Math.trunc(Number(node.sourcePortIndices?.[slotIndex]) || 0),
+        );
+        const liveResource =
+          pluginResource?.kind === 'bundle'
+            ? pluginResource.items[sourcePortIndex]
+            : pluginResource;
+        // workflowSlotResources 旧数据可能只保存 kind/text/url。始终和插件当前资源合并，
+        // 让新版宿主能从 outputBundle 补回 assetId/projectId/sourceNodeId，旧画布无需重新拉线。
+        const resource = liveResource || stored
+          ? { ...(liveResource || {}), ...(stored || {}) }
+          : undefined;
         if (resource?.kind) {
           const kind = String(resource.kind);
           const url = typeof resource.url === 'string' ? resource.url : '';
           const text = typeof resource.text === 'string' ? resource.text : '';
+          const sourceNodeId =
+            typeof resource.sourceNodeId === 'string' ? resource.sourceNodeId : undefined;
+          const sourceNode = sourceNodeId ? byId.get(sourceNodeId) : undefined;
+          const assetId =
+            typeof resource.assetId === 'string'
+              ? resource.assetId
+              : typeof (sourceNode as any)?.assetId === 'string'
+                ? String((sourceNode as any).assetId)
+                : undefined;
+          const resourceProjectId =
+            typeof resource.projectId === 'string'
+              ? resource.projectId
+              : typeof (sourceNode as any)?.projectId === 'string'
+                ? String((sourceNode as any).projectId)
+                : undefined;
+          const sourceResultUrl =
+            typeof (sourceNode as any)?.resultUrl === 'string'
+              ? String((sourceNode as any).resultUrl)
+              : typeof (sourceNode as any)?.dataUrl === 'string'
+                ? String((sourceNode as any).dataUrl)
+                : undefined;
           return [
             {
               ...parent,
               __workflowSlotIndex: slotIndex,
               __workflowParentId: id,
+              ...(sourceNodeId ? { sourceNodeId } : {}),
+              ...(assetId ? { assetId } : {}),
+              ...(resourceProjectId ? { projectId: resourceProjectId } : {}),
               url:
                 kind === 'text'
                   ? 'text-node-placeholder'
                   : kind === 'audio'
                     ? 'audio-node-placeholder'
                     : url,
-              resultUrl: kind === 'image' || kind === 'video' ? url : parent.resultUrl,
-              lastFrame: kind === 'video' ? url : parent.lastFrame,
+              resultUrl:
+                kind === 'text'
+                  ? parent.resultUrl
+                  : sourceResultUrl || url || parent.resultUrl,
+              lastFrame: kind === 'video' ? sourceResultUrl || url : parent.lastFrame,
               textContent: kind === 'text' ? text : parent.textContent,
               prompt: kind === 'text' ? text : parent.prompt,
               type:

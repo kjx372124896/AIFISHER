@@ -978,12 +978,22 @@ export function buildWorkflowCanvasValues(
   const parents = Array.isArray(node.parentIds) ? node.parentIds : [];
   const sourcePortIndices = Array.isArray(node.sourcePortIndices) ? node.sourcePortIndices : [];
   const byId = new Map(connectedNodes.map((candidate) => [candidate.id, candidate]));
+  const parentForSlot = (parentId: string | undefined, slotIndex: number) => {
+    if (!parentId) return undefined;
+    return (
+      connectedNodes.find(
+        (candidate) =>
+          candidate.__workflowParentId === parentId &&
+          Number(candidate.__workflowSlotIndex) === slotIndex,
+      ) || byId.get(parentId)
+    );
+  };
   const grouped = new Map<string, Array<Record<string, string>>>();
   const slots = expandWorkflowStorageSlots(node);
   const bundleAssignments = new Map<number, PluginResourceItem>();
   const reserved = new Set<number>();
   for (const slot of slots) {
-    const parent = parents[slot.slotIndex] ? byId.get(parents[slot.slotIndex]) : undefined;
+    const parent = parentForSlot(parents[slot.slotIndex], slot.slotIndex);
     if (parent && pluginBundleItems(parent).length === 0) reserved.add(slot.slotIndex);
   }
   const bundleParents = [...new Set(parents.filter(Boolean))]
@@ -1035,7 +1045,7 @@ export function buildWorkflowCanvasValues(
       continue;
     }
     const parentId = parents[slot.slotIndex];
-    const bundleAnchor = parentId ? byId.get(parentId) : undefined;
+    const bundleAnchor = parentForSlot(parentId, slot.slotIndex);
     if (!parentId || (bundleAnchor && pluginBundleItems(bundleAnchor).length > 0)) {
       if (
         slot.source === 'parameter' &&
@@ -1051,7 +1061,7 @@ export function buildWorkflowCanvasValues(
       }
       continue;
     }
-    const parent = byId.get(parentId);
+    const parent = parentForSlot(parentId, slot.slotIndex);
     if (!parent) throw new Error(`${slot.label}连接的素材节点已经不存在`);
     const sourcePortIndex = Math.max(0, Math.trunc(sourcePortIndices[slot.slotIndex] || 0));
     if (parent.kind === 'workflow' && !outputValue(parent, sourcePortIndex))

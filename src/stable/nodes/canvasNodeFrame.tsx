@@ -107,6 +107,7 @@ interface FrameProps {
   zIndex?: number;
   zoom?: number;
   isBareCard?: boolean;
+  controlsScaleWithCanvas?: boolean;
 }
 export function CanvasNodeFrame(
   React: Runtime,
@@ -172,8 +173,10 @@ export function CanvasNodeFrame(
           <div
             className="absolute left-1/2 z-[100] flex flex-col items-center"
             style={{
-              top: `calc(100% + ${16 * inverse}px)`,
-              transform: `translateX(-50%) scale(${inverse})`,
+              top: props.controlsScaleWithCanvas ? 'calc(100% + 16px)' : `calc(100% + ${16 * inverse}px)`,
+              transform: props.controlsScaleWithCanvas
+                ? 'translateX(-50%)'
+                : `translateX(-50%) scale(${inverse})`,
               transformOrigin: 'top center',
               width: '680px',
             }}

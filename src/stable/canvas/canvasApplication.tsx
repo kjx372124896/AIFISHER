@@ -1339,6 +1339,29 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         documentEpoch: getWorkflowEpoch(),
         onBack: backToProjects,
         onImportProjectJson: chooseProjectFile,
+        onExportProjectJson: () => {
+          const safeTitle = (canvasTitle.trim() || 'canvas')
+            .replace(/[\\/:*?"<>|]+/g, '-')
+            .replace(/\s+/g, ' ')
+            .trim();
+          const document = {
+            title: canvasTitle,
+            nodes,
+            groups,
+            viewport,
+            isMinimapOpen,
+          };
+          const url = URL.createObjectURL(
+            new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' }),
+          );
+          const anchor = window.document.createElement('a');
+          anchor.href = url;
+          anchor.download = `${safeTitle || 'canvas'}.json`;
+          window.document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
         hasUnsavedChanges,
         isChatOpen,
         chatPanelWidth,

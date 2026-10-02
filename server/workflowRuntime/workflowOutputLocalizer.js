@@ -20,7 +20,9 @@ import {
   removeQuarantinedFlatDirectory,
 } from './privateRecoveryDirectory.js';
 
-const BUNDLED_FFMPEG_PATH = path.join(RUNTIME_PATHS.BIN_DIR, 'ffmpeg.exe');
+const BUNDLED_FFMPEG_PATH = fs.existsSync(path.join(RUNTIME_PATHS.BIN_DIR, 'ffmpeg.exe'))
+  ? path.join(RUNTIME_PATHS.BIN_DIR, 'ffmpeg.exe')
+  : 'ffmpeg';
 const MAXIMUM_MEDIA_BYTES = resolveMediaArtifact({ declaredType: 'video' }).maximumBytes;
 
 function safeSegment(value, label) {
@@ -333,32 +335,64 @@ export async function localizeWorkflowOutputs({
       const originalFilename = String(candidate.handle.filename || '');
       const downloadPath = path.join(runDirectory, `${assetId}.tmp`);
       temporaryPaths.push(downloadPath);
-      let integrity = await downloadCandidate({
-        client,
-        candidate,
-        temporaryPath: downloadPath,
-        maximumBytes: MAXIMUM_MEDIA_BYTES,
-        signal,
-        wait,
-      });
+      let integrity;
       let artifact;
-      try {
-        artifact = await inspectWorkflowMedia({
-          filePath: downloadPath,
-          filename: originalFilename,
-          declaredType: candidate.mediaKind,
-          contentType: integrity.contentType,
-          prefix: integrity.prefix,
-          probeMediaMetadata,
+      const inspectionAttempts = source.startsWith('runninghub-') ? 4 : 1;
+      for (let inspectionAttempt = 1; inspectionAttempt <= inspectionAttempts; inspectionAttempt += 1) {
+        integrity = await downloadCandidate({
+          client,
+          candidate,
+          temporaryPath: downloadPath,
+          maximumBytes: MAXIMUM_MEDIA_BYTES,
+          signal,
+          wait,
         });
-      } catch (error) {
-        if (error instanceof MediaArtifactError || error instanceof MediaProbeError) {
+        try {
+          artifact = await inspectWorkflowMedia({
+            filePath: downloadPath,
+            filename: originalFilename,
+            declaredType: candidate.mediaKind,
+            contentType: integrity.contentType,
+            prefix: integrity.prefix,
+            probeMediaMetadata,
+          });
+          break;
+        } catch (error) {
+          if (!(error instanceof MediaArtifactError || error instanceof MediaProbeError)) throw error;
+          if (inspectionAttempt < inspectionAttempts) {
+            logger.warn('RunningHub output not yet readable as declared media; retrying download', {
+              attempt: inspectionAttempt,
+              mediaKind: candidate.mediaKind,
+              contentType: integrity.contentType,
+              bytes: integrity.bytes,
+              prefixHex: integrity.prefix.subarray(0, 16).toString('hex'),
+            });
+            await rm(downloadPath, { force: true });
+            await wait(1_000 * inspectionAttempt);
+            continue;
+          }
+          logger.error('Workflow output media inspection failed', {
+            source,
+            runId: safeRunId,
+            declaredType: candidate.mediaKind,
+            filenameExtension: path.extname(originalFilename).toLowerCase(),
+            contentType: integrity.contentType,
+            bytes: integrity.bytes,
+            prefixHex: integrity.prefix.subarray(0, 24).toString('hex'),
+            errorCode: error && error.code,
+            errorType: error && error.name,
+          });
           throw new WorkflowOutputError(
             '工作流输出文件内容与媒体类型不匹配',
             'OUTPUT_TYPE_MISMATCH',
           );
         }
-        throw error;
+      }
+      if (!artifact || !integrity) {
+        throw new WorkflowOutputError(
+          '工作流输出文件内容与媒体类型不匹配',
+          'OUTPUT_TYPE_MISMATCH',
+        );
       }
       if (integrity.bytes > artifact.maximumBytes) {
         throw new WorkflowOutputError('工作流输出超过本地化限制', 'OUTPUT_SIZE_LIMIT', 413);

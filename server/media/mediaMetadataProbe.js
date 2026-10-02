@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { RUNTIME_PATHS } from '../workspace/runtimePaths.js';
 import { resolveMediaArtifact } from './mediaArtifact.js';
@@ -139,7 +140,9 @@ function runProbe(ffprobePath, filePath, { spawnImpl, timeoutMs }) {
 }
 
 export function createMediaMetadataProbe({
-  ffprobePath = path.join(RUNTIME_PATHS.BIN_DIR, 'ffprobe.exe'),
+  ffprobePath = fs.existsSync(path.join(RUNTIME_PATHS.BIN_DIR, 'ffprobe.exe'))
+    ? path.join(RUNTIME_PATHS.BIN_DIR, 'ffprobe.exe')
+    : 'ffprobe',
   spawnImpl = spawn,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {

@@ -318,6 +318,10 @@ export function useCanvasConnections(hooks: Hooks, runtime: ConnectionRuntime) {
           kind: item.kind,
           text: item.text,
           url: item.url,
+          assetId: item.assetId,
+          projectId: item.projectId,
+          sourceNodeId: item.sourceNodeId,
+          order: item.order,
         },
       });
       reserved.add(slot.slotIndex);

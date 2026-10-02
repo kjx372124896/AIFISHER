@@ -85,7 +85,15 @@ export interface ConnectCanvasNodesOptions {
   inputCount?: number;
   connectionMode?: string;
   modeField?: 'imageMode' | 'videoMode' | 'comfyMode';
-  slotResource?: { kind: 'text' | 'image' | 'video' | 'audio'; text?: string; url?: string };
+  slotResource?: {
+    kind: 'text' | 'image' | 'video' | 'audio';
+    text?: string;
+    url?: string;
+    assetId?: string;
+    projectId?: string;
+    sourceNodeId?: string;
+    order?: number;
+  };
 }
 
 export interface CanvasConnectionIdentity {

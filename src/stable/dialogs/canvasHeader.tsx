@@ -15,6 +15,7 @@ interface Props {
   onSave(): Promise<{ unchanged?: boolean } | null | undefined>;
   onBack?(): unknown;
   onImportProjectJson?(): void;
+  onExportProjectJson?(): void;
   documentEpoch?: number;
   hasUnsavedChanges: boolean;
   lastAutoSaveTime?: number | null;
@@ -43,6 +44,7 @@ export function CanvasHeader(React: Runtime, props: Props, components: Component
     setIsEditingTitle,
     setEditingTitleValue,
     onImportProjectJson,
+    onExportProjectJson,
     hasUnsavedChanges,
     lastAutoSaveTime,
     lastSavedBy = '用户-',
@@ -246,6 +248,19 @@ export function CanvasHeader(React: Runtime, props: Props, components: Component
                 >
                   <ImportIcon size={14} className={'text-[var(--af-text-secondary)]'} />
                   {'导入项目 JSON'}
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onExportProjectJson?.();
+                  }}
+                  className={
+                    'w-full h-9 px-2.5 rounded-md text-left text-sm text-[var(--af-text)] hover:bg-[var(--af-surface-raised)] flex items-center gap-2'
+                  }
+                  type={'button'}
+                >
+                  <SaveIcon size={14} className={'text-[var(--af-text-secondary)]'} />
+                  {'导出项目 JSON'}
                 </button>
                 <button
                   onClick={leave}

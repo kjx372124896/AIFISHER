@@ -199,6 +199,7 @@ export function CanvasTextCard(
   return (
     <Frame
       {...frameProps(props)}
+      controlsScaleWithCanvas={true}
       controls={
         props.selected && !props.isDragging && showControls ? (
           <Composer

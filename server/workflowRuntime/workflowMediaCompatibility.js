@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -57,7 +57,9 @@ export async function convertedIntegrity(filePath, maximumBytes, contentType) {
 export async function runWorkflowConversion(args, { signal, spawnProcess = spawn } = {}) {
   signal?.throwIfAborted();
   await new Promise((resolve, reject) => {
-    const child = spawnProcess(path.join(RUNTIME_PATHS.BIN_DIR, 'ffmpeg.exe'),
+    const bundledFfmpeg = path.join(RUNTIME_PATHS.BIN_DIR, 'ffmpeg.exe');
+    const ffmpegExecutable = existsSync(bundledFfmpeg) ? bundledFfmpeg : 'ffmpeg';
+    const child = spawnProcess(ffmpegExecutable,
       ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...args], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let settled = false, stopped = false;
     const finish = error => {

@@ -45,7 +45,7 @@ jobs:
         run: npm run typecheck
 
       - name: Build Windows installer
-        run: npm run desktop:installer
+        run: npm run desktop:installer -- --publish never
 
       - name: Ensure release tag exists
         shell: pwsh

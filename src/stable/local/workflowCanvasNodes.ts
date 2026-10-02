@@ -934,7 +934,10 @@ function assetFromNode(
   // Replacing an image or selecting a generation candidate changes resultUrl;
   // legacy assetId metadata can still name the previous character.
   const currentUrl = node.resultUrl || node.url || node.dataUrl;
-  if (currentUrl) return localAssetReference(currentUrl, projectId, mediaKind);
+  if (currentUrl) {
+    const local = localAssetReference(currentUrl, projectId, mediaKind);
+    if (local) return local;
+  }
   if (
     typeof node.assetId === 'string' &&
     typeof node.projectId === 'string' &&
@@ -1013,10 +1016,19 @@ export function buildWorkflowCanvasValues(
           !/[\\/\0\r\n]/.test(bundleItem.assetId)
             ? bundleItem.assetId
             : undefined;
+        // Bundle 里的 url 主要用于预览/模型参考，可能是远程 URL，不能把它当成
+        // 工作流真正可执行的项目素材。优先沿 sourceNodeId 回到原始画布节点，
+        // 由宿主读取它当前的项目 assetId；这样即使插件 bundle 是旧版本、只保存了
+        // sourceNodeId，也仍然能把“预览图”还原成真正的项目素材。
+        const sourceNode = bundleItem.sourceNodeId ? byId.get(bundleItem.sourceNodeId) : undefined;
+        const sourceAsset = sourceNode
+          ? assetFromNode(sourceNode, 0, projectId, slot.mediaKind)
+          : null;
         const asset =
-          assetId && bundleItem.projectId === projectId
+          sourceAsset ||
+          (assetId && bundleItem.projectId === projectId
             ? { assetId, projectId, type: slot.mediaKind }
-            : localAssetReference(bundleItem.url, projectId, slot.mediaKind);
+            : localAssetReference(bundleItem.url, projectId, slot.mediaKind));
         if (!asset) throw new Error(`${slot.label}需要当前项目内的${slot.mediaKind}素材`);
         grouped.set(slot.bindingKey, [...(grouped.get(slot.bindingKey) || []), asset]);
       }

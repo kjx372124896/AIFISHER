@@ -1,0 +1,77 @@
+name: Windows Release
+
+on:
+  push:
+    branches:
+      - "2.0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check whether release already exists
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "exists=false" >> $env:GITHUB_OUTPUT
+            $global:LASTEXITCODE = 0
+          }
+
+      - name: Setup Node
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.20.0"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
+
+      - name: Install root dependencies
+        if: steps.release.outputs.exists != 'true'
+        run: npm ci
+
+      - name: Install desktop dependencies
+        if: steps.release.outputs.exists != 'true'
+        run: npm ci --prefix apps/desktop
+
+      - name: Verify
+        if: steps.release.outputs.exists != 'true'
+        run: npm run typecheck
+
+      - name: Build and publish Windows installer
+        if: steps.release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run desktop:installer -- --publish always
+
+      - name: Release summary
+        shell: pwsh
+        run: |
+          if ("${{ steps.release.outputs.exists }}" -eq "true") {
+            "Release ${{ steps.version.outputs.tag }} already exists; build skipped." >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            "Published ${{ steps.version.outputs.tag }} for Windows auto-update." >> $env:GITHUB_STEP_SUMMARY
+          }

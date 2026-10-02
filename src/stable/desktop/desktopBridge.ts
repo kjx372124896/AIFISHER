@@ -10,9 +10,9 @@ export interface AifisherDesktopBridge {
     status(): Promise<DesktopUpdateEvent>;
     prepare(): Promise<DesktopUpdateEvent>;
     check?(): Promise<DesktopUpdateEvent>;
-    source?(): Promise<{ directory: string | null; enabled: boolean }>;
-    selectLocalSource?(): Promise<{ directory: string | null; enabled: boolean }>;
-    resetSource?(): Promise<{ directory: string | null; enabled: boolean }>;
+    source?(): Promise<{ directory: string | null; enabled: boolean; provider?: 'github' | 'local' }>;
+    selectLocalSource?(): Promise<{ directory: string | null; enabled: boolean; provider?: 'github' | 'local' }>;
+    resetSource?(): Promise<{ directory: string | null; enabled: boolean; provider?: 'github' | 'local' }>;
     apply(): Promise<DesktopUpdateEvent>;
     onProgress(listener: (event: DesktopUpdateEvent) => void): () => void;
   };

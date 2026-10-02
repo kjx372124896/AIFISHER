@@ -29,7 +29,8 @@ import {
 } from './windowManager.mjs';
 import { resolveLocalWorkspaceId } from './localWorkspace.mjs';
 import { confirmUpdateStartup } from './updates/startupConfirmation.mjs';
-import { createUpdateCoordinator } from './updates/updateCoordinator.mjs';
+import updaterPackage from 'electron-updater';
+import { createGithubUpdateCoordinator } from './updates/githubUpdateCoordinator.mjs';
 import { activateUpdateWindow, shouldDeferLaunch } from './updates/updateLaunchGuard.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -147,8 +148,8 @@ function applyUpdate() {
     })
     .then(
       (event) => {
+        // electron-updater owns the graceful quit/install/relaunch sequence.
         quitting = true;
-        app.exit(0);
         return event;
       },
       (error) => {
@@ -214,12 +215,11 @@ async function start() {
       createBackendEnvironment({ installation, userId, pipe, helpers }),
   });
   backend.onState(onBackendState);
-  updates = createUpdateCoordinator({
-    bridgePath: installation.updateBridge,
-    installRoot: installation.packaged ? installation.root : null,
-    ownerPid: process.pid,
-    spawnImpl: spawn,
-    sourceSettingsPath: path.join(installation.config, 'local-update-source.json'),
+  const { autoUpdater } = updaterPackage;
+  updates = createGithubUpdateCoordinator({
+    autoUpdater,
+    packaged: installation.packaged,
+    currentVersion: productVersion,
   });
   updates.onProgress((event) => broadcast('update:progress', event));
   protocol.handle(

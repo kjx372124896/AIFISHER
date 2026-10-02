@@ -19,3 +19,5 @@ logs/
 *.db*
 apps/desktop/launcher/dist/
 *.tsbuildinfo
+.desktop-package/
+release/

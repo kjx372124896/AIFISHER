@@ -1,6 +1,6 @@
 {
   "name": "aifisher-desktop",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "private": true,
   "description": "AIFISHER Windows desktop application.",
   "main": "src/main.mjs",
@@ -18,6 +18,14 @@
     "directories": {
       "output": "../../release/windows"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kjx372124896",
+        "repo": "AIFISHER",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "src/**/*",
       "package.json"
@@ -26,11 +34,20 @@
       {
         "from": "../../.desktop-package/app",
         "to": "app",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
-      "target": [{"target": "nsis", "arch": ["x64"]}],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "../../public/aifisher-app.ico",
       "artifactName": "AIFISHER-Setup-${version}-${arch}.${ext}"
     },
@@ -45,5 +62,8 @@
       "uninstallDisplayName": "AIFISHER",
       "deleteAppDataOnUninstall": false
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

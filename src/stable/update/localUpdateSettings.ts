@@ -17,7 +17,7 @@ export function mountLocalUpdateSettings(
       <button type="button" data-reset class="${buttonClass}">恢复正式更新源</button>
       <button type="button" data-check class="${buttonClass}">检查更新</button>
     </div>
-    <p class="text-sm text-[var(--af-text-secondary)]">本机测试仅影响此安装。候选校验通过后，由你点击“立即更新并重启”。</p>
+    <p class="text-sm text-[var(--af-text-secondary)]">应用会检查正式发布的新版本；下载完成后，由你点击“立即更新并重启”。</p>
     <p role="status" class="text-sm text-[var(--af-text-secondary)]"></p>
   </div>`;
   const status = host.querySelector<HTMLElement>('[role="status"]')!;
@@ -25,7 +25,15 @@ export function mountLocalUpdateSettings(
   const buttons = [...host.querySelectorAll<HTMLButtonElement>('button')];
   const refresh = async () => {
     const value = await update.source!();
-    if (!disposed) source.textContent = value.enabled ? `本机测试：${value.directory}` : '正式更新源';
+    if (disposed) return;
+    const github = value.provider === 'github';
+    source.textContent = github
+      ? '正式更新源：GitHub Releases'
+      : value.enabled
+        ? `本机测试：${value.directory}`
+        : '正式更新源';
+    buttons[0].hidden = github;
+    buttons[1].hidden = github;
   };
   const run = async (work: () => Promise<unknown>) => {
     buttons.forEach((button) => { button.disabled = true; });

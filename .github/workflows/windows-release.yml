@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read version
         id: version
@@ -24,23 +26,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
 
-      - name: Check whether release already exists
-        id: release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ steps.version.outputs.tag }}"
-          gh release view $tag --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            "exists=true" >> $env:GITHUB_OUTPUT
-          } else {
-            "exists=false" >> $env:GITHUB_OUTPUT
-            $global:LASTEXITCODE = 0
-          }
-
       - name: Setup Node
-        if: steps.release.outputs.exists != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "24.20.0"
@@ -50,28 +36,80 @@ jobs:
             apps/desktop/package-lock.json
 
       - name: Install root dependencies
-        if: steps.release.outputs.exists != 'true'
         run: npm ci
 
       - name: Install desktop dependencies
-        if: steps.release.outputs.exists != 'true'
         run: npm ci --prefix apps/desktop
 
       - name: Verify
-        if: steps.release.outputs.exists != 'true'
         run: npm run typecheck
 
-      - name: Build and publish Windows installer
-        if: steps.release.outputs.exists != 'true'
+      - name: Build Windows installer
+        run: npm run desktop:installer
+
+      - name: Ensure release tag exists
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: npm run desktop:installer -- --publish always
-
-      - name: Release summary
-        shell: pwsh
         run: |
-          if ("${{ steps.release.outputs.exists }}" -eq "true") {
-            "Release ${{ steps.version.outputs.tag }} already exists; build skipped." >> $env:GITHUB_STEP_SUMMARY
-          } else {
-            "Published ${{ steps.version.outputs.tag }} for Windows auto-update." >> $env:GITHUB_STEP_SUMMARY
+          $tag = "${{ steps.version.outputs.tag }}"
+          git fetch --tags --force
+          if (-not (git tag -l $tag)) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag $tag $env:GITHUB_SHA
+            git push origin "refs/tags/$tag"
           }
+
+      - name: Create or reuse GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $version = "${{ steps.version.outputs.version }}"
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            $global:LASTEXITCODE = 0
+            gh release create $tag --repo "${{ github.repository }}" --target $env:GITHUB_SHA --title $version --notes "AIFISHER $version Windows release."
+          }
+
+      - name: Upload updater assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $installer = "release/windows/AIFISHER-Setup-$version-x64.exe"
+          $blockmap = "$installer.blockmap"
+          $latest = "release/windows/latest.yml"
+
+          foreach ($file in @($installer, $blockmap, $latest)) {
+            if (-not (Test-Path $file)) {
+              throw "Missing release asset: $file"
+            }
+          }
+
+          gh release upload $tag $installer $blockmap $latest --repo "${{ github.repository }}" --clobber
+
+      - name: Verify published updater assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $assets = gh release view $tag --repo "${{ github.repository }}" --json assets | ConvertFrom-Json
+          $names = @($assets.assets.name)
+          $required = @(
+            "AIFISHER-Setup-$version-x64.exe",
+            "AIFISHER-Setup-$version-x64.exe.blockmap",
+            "latest.yml"
+          )
+          foreach ($name in $required) {
+            if ($names -notcontains $name) {
+              throw "Release asset missing after upload: $name"
+            }
+          }
+          "Published $tag with installer, blockmap and latest.yml." >> $env:GITHUB_STEP_SUMMARY

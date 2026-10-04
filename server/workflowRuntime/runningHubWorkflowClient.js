@@ -256,8 +256,12 @@ function classifyTaskOutputs(result) {
       ),
     };
   }
-  if (businessCode.value === 804) {
-    return { state: 'pending', outputs: [], status: 'RUNNING' };
+  if (businessCode.value === 804 || businessCode.value === 813) {
+    return {
+      state: 'pending',
+      outputs: [],
+      status: businessCode.value === 813 ? 'QUEUED' : 'RUNNING',
+    };
   }
   if (businessCode.present && businessCode.value !== 0) {
     throw responseError(result, { status: 200, ok: true });

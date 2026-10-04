@@ -469,7 +469,7 @@ export function CanvasEdges(React: Runtime, props: Props, geometry: Geometry) {
                 <circle cx={5} cy={6} r={3.2} />
               </g>
             </g>
-            {(highlighted || over) && flowVisible && (
+            {(chosen || over) && flowVisible && (
               <EdgeFlow
                 React={React}
                 edge={edge}

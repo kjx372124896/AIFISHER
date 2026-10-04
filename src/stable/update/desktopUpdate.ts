@@ -9,7 +9,6 @@ import {
 } from '../../update/desktopUpdateModel';
 import { desktopBridge, type AifisherDesktopBridge } from '../desktop/desktopBridge';
 import { activateModal } from '../design/modalFocus';
-import { createUpdateDownloadFallback } from '../../update/updateDownloadFallback';
 
 export type { DesktopUpdateBridge, DesktopUpdateEvent } from '../../update/desktopUpdateModel';
 
@@ -102,7 +101,6 @@ function showFailure(documentRoot: Document, message: string) {
   close.style.cssText = 'float:right;margin-left:16px;background:transparent;border:0;color:#a3a3a3;font-size:20px;cursor:pointer';
   close.onclick = () => toast.remove();
   toast.prepend(close);
-  toast.append(createUpdateDownloadFallback(documentRoot));
   documentRoot.body.append(toast);
 }
 
@@ -140,7 +138,6 @@ function renderUpdate(
         <button class="fisherai-update-apply" type="button">立即更新并重启</button>
       </div>`;
     documentRoot.body.append(surface);
-    surface.querySelector('.fisherai-update-card')!.append(createUpdateDownloadFallback(documentRoot));
   }
   const percent = Math.max(0, Math.min(100, event.overallPercent ?? 0));
   const ready = event.status === 'ready';

@@ -67,7 +67,7 @@
 
 ## 开始使用
 
-**使用安装版**：查看 [版本发布](https://github.com/Work-Fisher/AIFISHER/releases) 或 [官方下载网盘](https://pan.quark.cn/s/4902ac63461c)。GitHub 安装包会在验收完成后发布；已安装的正式版继续接收官方签名自动更新。
+**使用安装版**：查看 [版本发布](https://github.com/Work-Fisher/AIFISHER/releases)。GitHub 安装包会在验收完成后发布；已安装的正式版继续接收官方签名自动更新。
 
 **运行源码**：按下方步骤启动。源码保留 API 接入和可选账号功能，通过 Git 拉取后续更新；安装器不用于覆盖源码目录。
 

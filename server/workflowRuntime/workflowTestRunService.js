@@ -306,7 +306,7 @@ export class WorkflowTestRunService {
             deployment.connection.remoteWebAppId || deployment.connection.remoteWorkflowId
           }`
         : `comfy:${deployment.connection.serverUrl}`,
-      maxConcurrent: 1,
+      maxConcurrent: ['runninghub-workflow', 'runninghub-webapp'].includes(deployment.runner) ? 100 : 1,
       timeEstimate: '1min',
       leaseHeartbeatMs: 30_000,
       absoluteTimeoutMs: deployment.timeoutMs + 30 * 60_000,

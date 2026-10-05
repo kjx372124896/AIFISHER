@@ -185,7 +185,7 @@ export async function optimizeMp4ForStreaming({
       '-map', '0:a:0?',
       ...(metadata.videoCodec === 'h264' && ['yuv420p', 'yuvj420p'].includes(metadata.pixelFormat)
         ? ['-c:v', 'copy']
-        : ['-c:v', 'libopenh264', '-b:v', String(Math.max(2_000_000, Math.min(50_000_000, (metadata.width || 1920) * (metadata.height || 1080) * 4))),
+        : ['-c:v', 'libx264', '-b:v', String(Math.max(2_000_000, Math.min(50_000_000, (metadata.width || 1920) * (metadata.height || 1080) * 4))),
           '-vf', 'format=yuv420p,pad=ceil(iw/2)*2:ceil(ih/2)*2']),
       ...(metadata.audioCodec === 'aac' || !metadata.audioCodec
         ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k']),
@@ -432,7 +432,27 @@ export async function localizeWorkflowOutputs({
       await mkdir(paths.directory, { recursive: true });
       const { finalPath, metadataPath, filename: finalFilename } = paths;
       if (artifact.kind === 'video') {
-        const metadata = artifact.metadata || await probeMediaMetadata(downloadPath, 'videos');
+        let metadata = artifact.metadata;
+        if (!metadata) {
+          try {
+            metadata = await probeMediaMetadata(downloadPath, 'videos');
+          } catch (error) {
+            const contentType = String(integrity.contentType || '').split(';', 1)[0].trim().toLowerCase();
+            const asciiPrefix = integrity.prefix.toString('ascii', 0, Math.min(integrity.prefix.length, 16));
+            const trustedRunningHubContainer = source.startsWith('runninghub-')
+              && candidate.mediaKind === 'video'
+              && contentType.startsWith('video/')
+              && asciiPrefix.slice(4, 8) === 'ftyp';
+            if (!(error instanceof MediaProbeError) || !trustedRunningHubContainer) throw error;
+            metadata = {};
+            logger.warn('RunningHub video metadata probe failed; deferring validation to FFmpeg normalization', {
+              mediaKind: candidate.mediaKind,
+              contentType,
+              prefixHex: integrity.prefix.subarray(0, 16).toString('hex'),
+              errorCode: error.code,
+            });
+          }
+        }
         const requiresConversion = artifact.extension !== '.mp4'
           || (metadata.videoCodec && (metadata.videoCodec !== 'h264'
             || !['yuv420p', 'yuvj420p'].includes(metadata.pixelFormat)))

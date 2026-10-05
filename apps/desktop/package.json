@@ -1,6 +1,6 @@
 {
   "name": "aifisher-desktop",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "private": true,
   "description": "AIFISHER Windows desktop application.",
   "main": "src/main.mjs",

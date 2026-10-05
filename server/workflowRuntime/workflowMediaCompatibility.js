@@ -17,6 +17,19 @@ export async function inspectWorkflowMedia(options) {
   const { prefix, filePath, probeMediaMetadata } = options;
   const hex = prefix.toString('hex'), ascii = prefix.toString('ascii');
   const brand = ascii.slice(4, 8) === 'ftyp' ? ascii.slice(8, 12) : '';
+  const normalizedBrand = brand.trim().toLowerCase();
+  const declaredType = String(options.declaredType || '').trim().toLowerCase();
+  const contentType = String(options.contentType || '').split(';', 1)[0].trim().toLowerCase();
+  // RunningHub/QuickTime-flavoured MP4 files commonly use the `qt  ` major brand.
+  // When the workflow declares video and the HTTP response also declares video,
+  // the container header is sufficient to classify it without an eager ffprobe.
+  if (
+    normalizedBrand === 'qt'
+    && (declaredType === 'video' || declaredType === 'videos')
+    && contentType.startsWith('video/')
+  ) {
+    return artifact('video', '.mov', 'video/quicktime');
+  }
   if (/^(49492a00|4d4d002a|49492b00|4d4d002b)/.test(hex)) return artifact('image', '.tiff', 'image/tiff');
   if (['avif', 'avis'].includes(brand)) return artifact('image', '.avif', 'image/avif');
   const aiff = ascii.startsWith('FORM') && ['AIFF', 'AIFC'].includes(ascii.slice(8, 12));

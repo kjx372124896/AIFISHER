@@ -163,6 +163,7 @@ export function CanvasAudioNode(
       onResizeStart={onResizeStart}
       width={'365px'}
       zoom={zoom}
+      controlsScaleWithCanvas={true}
       controls={
         selected && !isDragging && !isUpload && showControls ? (
           <div

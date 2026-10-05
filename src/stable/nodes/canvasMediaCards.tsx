@@ -120,7 +120,12 @@ function MediaCard(
         }
       : { onUpload: props.onUpload };
   return (
-    <Frame {...frameProps(props)} width={kind === 'Video' ? '385px' : '365px'} controls={controls}>
+    <Frame
+      {...frameProps(props)}
+      width={kind === 'Video' ? '385px' : '365px'}
+      controlsScaleWithCanvas={true}
+      controls={controls}
+    >
       {(kind !== 'Image' || !(props.isVisible ?? true)) && <Header {...headerProps(props)} />}
       <Toolbar
         {...toolbarProps(props)}

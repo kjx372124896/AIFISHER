@@ -1,7 +1,7 @@
 {
   "name": "aifisher-canvas",
   "private": true,
-  "version": "2.1.5",
+  "version": "2.1.6",
   "type": "module",
   "scripts": {
     "brand:assets": "node scripts/runtime/run.mjs scripts/generate-app-icon.mjs",

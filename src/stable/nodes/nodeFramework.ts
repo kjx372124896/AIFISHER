@@ -197,6 +197,13 @@ const BASE_DEFINITIONS: readonly NodeDefinition[] = [
     initialStatus: 'idle',
   },
   {
+    type: 'video-script',
+    category: 'generation',
+    inputs: [{ id: 'context', media: ['text', 'image'], multiple: true }],
+    outputs: [{ id: 'text', media: ['text'], multiple: true }],
+    initialStatus: 'idle',
+  },
+  {
     type: 'image',
     category: 'generation',
     inputs: [{ id: 'references', media: ['text', 'image'], multiple: true }],
@@ -255,6 +262,7 @@ const BASE_DEFINITIONS: readonly NodeDefinition[] = [
 
 const STABLE_TYPE_ALIASES: Readonly<Record<string, string>> = {
   Text: 'text',
+  'Video Script': 'video-script',
   Image: 'image',
   Video: 'video',
   Audio: 'audio',
@@ -340,6 +348,7 @@ function boundedNumber(value: unknown, fallback: number, minimum: number, maximu
 
 const DEFAULT_NODE_SIZES: Readonly<Record<string, readonly [number, number]>> = {
   text: [360, 300],
+  'video-script': [620, 430],
   image: [360, 420],
   video: [420, 360],
   audio: [360, 220],

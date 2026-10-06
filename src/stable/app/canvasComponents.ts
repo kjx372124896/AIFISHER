@@ -158,6 +158,7 @@ export const Node = React.memo(
       Text: TextCard,
       Image: ImageCard,
       Video: VideoCard,
+      'Video Script': VideoScriptNode,
       Audio: AudioNode,
       'Image Compare': CompareNode,
       'Image Composite': CompositeNode,
@@ -293,6 +294,18 @@ export const VideoCard = bind(Dialogs.CanvasVideoCard)(() => [
     Toolbar: MediaToolbar,
     Composer: VideoComposer,
     Preview: VideoPlayer,
+  },
+]);
+export const VideoScriptNode = bind(Dialogs.CanvasVideoScriptNode)(() => [
+  {
+    Frame: NodeFrame,
+    PromptEditor: PromptEditor,
+    models: TEXT_MODELS,
+    FilmIcon: Icons.Clapperboard,
+    TableIcon: Icons.TableProperties,
+    SplitIcon: Icons.Split,
+    PlayIcon: Icons.Play,
+    CloseIcon: Icons.X,
   },
 ]);
 export const AudioNode = bind(Dialogs.CanvasAudioNode)(() => [

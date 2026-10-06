@@ -318,6 +318,15 @@ export function CanvasContextMenu(
             )}
             {item(
               {
+                label: connector ? '生成视频脚本' : '视频脚本',
+                icon: 'video',
+                description: connector ? '产品创意、图片 → 分镜脚本' : '结构化分镜、时长分段、多文本输出',
+                action: () => props.onSelectType('Video Script'),
+              },
+              true,
+            )}
+            {item(
+              {
                 label: connector ? '生成图像' : '图像生成',
                 icon: 'image',
                 description: connector ? '写实、插画、3D、动漫' : undefined,

@@ -54,9 +54,10 @@ interface Components {
   Node: CanvasComponent;
 }
 const emptyConnections: unknown[] = [];
-const idleZoomIndependentTypes = new Set(['Text', 'Image', 'Upload Image', 'Video', 'Upload Video']);
+const idleZoomIndependentTypes = new Set(['Text', 'Video Script', 'Image', 'Upload Image', 'Video', 'Upload Video']);
 const forwardedCallbacks = [
   'onGenerate',
+  'onCreateVideoScriptSegments',
   'onAddNext',
   'onSelect',
   'onConnectorDown',

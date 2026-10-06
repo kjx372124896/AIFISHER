@@ -96,8 +96,10 @@ export function inputMedia(
     };
   }
   const type = source.type.toLowerCase();
-  const kind = type.includes('video')
-    ? 'video'
+  const kind = type === 'video script'
+    ? 'text'
+    : type.includes('video')
+      ? 'video'
     : type.includes('audio')
       ? 'audio'
       : type === 'text'

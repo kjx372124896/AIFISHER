@@ -167,6 +167,7 @@ export function nodeWidth(node: CanvasNode, parent?: CanvasNode): number {
   if (media) return media.width;
   const stored = positive(node.width);
   if (stored) return stored;
+  if (node.type === 'Video Script') return 620;
   if (node.type === 'Text') return 252;
   if (['Audio', 'Upload Audio'].includes(node.type)) return 365;
   if (node.type === 'ComfyUI')
@@ -189,6 +190,7 @@ export function nodeHeight(node: CanvasNode, parent?: CanvasNode): number {
   if (media) return media.height;
   const stored = positive(node.height);
   if (stored) return stored;
+  if (node.type === 'Video Script') return 430;
   if (node.type === 'Text') return node.isPromptExpanded ? 480 : 252;
   if (['Audio', 'Upload Audio'].includes(node.type)) return 112;
   if (node.type === 'ComfyUI')
@@ -233,7 +235,7 @@ export function nodeMediaKind(value: CanvasNode | string): MediaKind {
     const resource = getCanvasPluginNodeDefinition(type)?.resource?.(toPluginNode(value as any));
     if (resource?.kind && resource.kind !== 'bundle') return resource.kind;
   }
-  if (type === 'Text') return 'text';
+  if (type === 'Text' || type === 'Video Script') return 'text';
   if (['Image', 'Upload Image', 'Image Compare', 'Image Composite', 'ComfyUI'].includes(type))
     return 'image';
   if (['Video', 'Upload Video'].includes(type)) return 'video';
@@ -263,7 +265,7 @@ function targetModel(node: CanvasNode, catalog: ModelCatalog, override?: string)
     ? 'image'
     : ['Video', 'Upload Video'].includes(node.type)
       ? 'video'
-      : node.type === 'Text'
+      : node.type === 'Text' || node.type === 'Video Script'
         ? 'text'
         : ['Audio', 'Upload Audio'].includes(node.type)
           ? 'audio'

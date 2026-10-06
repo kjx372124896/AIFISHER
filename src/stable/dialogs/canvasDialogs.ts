@@ -113,6 +113,7 @@ export { CanvasVideoComposer } from '../nodes/canvasVideoComposer';
 export { CanvasAudioPlayer } from '../media/canvasAudioPlayer';
 export { CanvasAudioNode } from '../nodes/canvasAudioNode';
 export { CanvasTextCard, CanvasImageCard, CanvasVideoCard } from '../nodes/canvasMediaCards';
+export { CanvasVideoScriptNode } from '../nodes/canvasVideoScriptNode';
 export { CanvasDimensions, CanvasAdvancedSettings } from '../nodes/canvasNodeControls';
 export { CanvasModelSelector } from '../nodes/canvasModelSelector';
 export { CanvasConnectedAssets } from '../nodes/canvasConnectedAssets';

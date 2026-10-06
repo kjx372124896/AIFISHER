@@ -257,18 +257,23 @@ export function useCanvasWorkflow(hooks: Hooks, props: CanvasWorkflowProps) {
               body: JSON.stringify(document),
             });
           let result: WorkflowRecord;
-          try {
-            result = await post(draft);
-          } catch (error) {
-            if ((error as { code?: string }).code !== 'REVISION_CONFLICT') throw error;
-            if (owner !== epoch.current) throw stale();
-            const remote = validateDocument(
-              await request(`/api/workflows/${encodeURIComponent(String(draft.id))}`),
-              String(draft.id),
-            );
-            if (owner !== epoch.current) throw stale();
-            draft = mergeWorkflow(original, draft, remote) as typeof draft;
-            result = await post(draft);
+          let mergeBase = original;
+          for (let attempt = 0; ; attempt += 1) {
+            try {
+              result = await post(draft);
+              break;
+            } catch (error) {
+              if ((error as { code?: string }).code !== 'REVISION_CONFLICT') throw error;
+              if (attempt >= 3) throw error;
+              if (owner !== epoch.current) throw stale();
+              const remote = validateDocument(
+                await request(`/api/workflows/${encodeURIComponent(String(draft.id))}`),
+                String(draft.id),
+              );
+              if (owner !== epoch.current) throw stale();
+              draft = mergeWorkflow(mergeBase, draft, remote) as typeof draft;
+              mergeBase = remote;
+            }
           }
           if (owner !== epoch.current) throw stale();
           if (

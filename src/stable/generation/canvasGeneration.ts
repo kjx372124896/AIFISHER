@@ -132,7 +132,7 @@ export function createCanvasGeneration(
         disposed ||
         binding.isActive?.() === false ||
         !node ||
-        !['Image', 'Video', 'Audio', 'Text'].includes(node.type)
+        !['Image', 'Video', 'Audio', 'Text', 'Video Script'].includes(node.type)
       )
         return;
       if (
@@ -176,13 +176,13 @@ export function createCanvasGeneration(
         if (owns()) binding.updateNode(id, patch);
       };
       try {
-        const modelName = text(node[`${node.type.toLowerCase()}Model`]);
+        const modelName = text(node[node.type === 'Video Script' ? 'textModel' : `${node.type.toLowerCase()}Model`]);
         const catalog =
           node.type === 'Image'
             ? models.imageModels
             : node.type === 'Video'
               ? models.videoModels
-              : node.type === 'Text'
+              : node.type === 'Text' || node.type === 'Video Script'
                 ? models.textModels
                 : models.audioModels;
         const model = catalog.find((candidate) => candidate.name === modelName);
@@ -261,7 +261,7 @@ export function createCanvasGeneration(
         );
         authorization?.submitted(attempt);
         let patch: Partial<CanvasNode>;
-        if (node.type === 'Text') {
+        if (node.type === 'Text' || node.type === 'Video Script') {
           const result = await observeWithin(runtime.text(ownedRequest), timeout);
           patch = { textContent: result.text };
         } else {

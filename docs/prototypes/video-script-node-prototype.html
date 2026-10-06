@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AIFISHER 视频脚本节点原型</title>
+<style>
+:root{--bg:#0b0d10;--panel:#14171c;--panel2:#1b1f26;--line:#2a3039;--text:#f4f6f8;--muted:#9aa3af;--accent:#7c8cff;--ok:#58c27d;--warn:#f2b84b;--danger:#f06b6b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#161a22 0,#0b0d10 52%);color:var(--text);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+.app{min-height:100vh;padding:30px}.shell{max-width:1380px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.title h1{font-size:24px;margin:0 0 6px}.title p{margin:0;color:var(--muted)}.badge{border:1px solid #3a4260;background:#1c2233;color:#cfd5ff;border-radius:999px;padding:7px 11px}
+.workspace{display:grid;grid-template-columns:310px 1fr;gap:18px}.card{background:linear-gradient(180deg,#171a20,#12151a);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.28)}
+.left{padding:16px}.section{padding:14px 0;border-bottom:1px solid var(--line)}.section:last-child{border-bottom:0}.section h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#aeb7c5;margin:0 0 10px}
+label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.input,.select,.textarea{width:100%;background:#0e1116;border:1px solid #303744;border-radius:10px;color:var(--text);padding:10px 11px;outline:none}.textarea{min-height:90px;resize:vertical}
+.chipwrap{display:flex;flex-wrap:wrap;gap:7px}.chip{border:1px solid #343b48;background:#10141a;border-radius:999px;padding:6px 9px;color:#c6ced9}.chip.active{background:#252d48;border-color:#5869cc;color:#eef0ff}
+.main{padding:16px;min-width:0}.node{border:1px solid #323a47;border-radius:18px;background:#111419;overflow:hidden}.nodehead{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);background:#171b22}.nodeicon{width:34px;height:34px;border-radius:10px;background:#242b45;display:grid;place-items:center}.nodehead strong{font-size:15px}.meta{color:var(--muted);font-size:12px}.grow{flex:1}.btn{border:1px solid #363e4b;background:#171c24;color:var(--text);border-radius:10px;padding:9px 12px;cursor:pointer}.btn:hover{background:#202633}.btn.primary{background:#6575f5;border-color:#6575f5}.btn.green{background:#1f6f44;border-color:#2e8d5b}.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line);background:#12161c}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:14px}.metric{background:#0d1014;border:1px solid #252b34;border-radius:12px;padding:12px}.metric b{display:block;font-size:18px;margin-bottom:3px}.metric span{color:var(--muted);font-size:12px}
+.tablewrap{overflow:auto;border-top:1px solid var(--line)}table{border-collapse:collapse;width:100%;min-width:1120px}th,td{border-bottom:1px solid #232933;padding:10px;vertical-align:top}th{position:sticky;top:0;background:#151920;color:#aeb7c5;text-align:left;font-size:12px}td input,td textarea{width:100%;background:transparent;border:0;color:var(--text);outline:none;font:inherit}td textarea{min-height:50px;resize:vertical}.seg{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;background:#1a2130;color:#bdc6ff;font-size:11px}.duration.bad{color:#ff9b9b}.duration.good{color:#73d894}
+.foot{display:flex;align-items:center;gap:10px;padding:12px 14px}.foot .hint{color:var(--muted);font-size:12px}.modal{position:fixed;inset:0;background:rgba(3,5,8,.76);display:none;align-items:center;justify-content:center;padding:24px;z-index:50}.modal.open{display:flex}.dialog{width:min(1280px,96vw);max-height:90vh;overflow:hidden;background:#101318;border:1px solid #303744;border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55)}.dialoghead{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}.dialogbody{max-height:72vh;overflow:auto}.close{margin-left:auto}.splitgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}.splitcard{background:#0c0f13;border:1px solid #282e37;border-radius:14px;padding:12px}.splitcard h4{margin:0 0 6px}.splitcard p{margin:0;color:var(--muted);font-size:12px}.small{font-size:12px;color:var(--muted)}@media(max-width:1000px){.workspace{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,1fr)}.splitgrid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app"><div class="shell">
+  <div class="top"><div class="title"><h1>视频脚本节点 · 交互原型</h1><p>参考 Open-AI-Canvas 分镜表格，但强化时长约束、分段、预设提示词与一键拆文本节点。</p></div><span class="badge">Prototype v1</span></div>
+  <div class="workspace">
+    <aside class="card left">
+      <div class="section"><h3>生成配置</h3>
+        <div class="row"><div><label>单镜头最短</label><input id="minShot" class="input" type="number" value="1" min="0.5" step="0.5"></div><div><label>单镜头最长</label><input id="maxShot" class="input" type="number" value="3" min="1" step="0.5"></div></div>
+        <div style="height:8px"></div>
+        <div class="row"><div><label>总时长（秒）</label><input id="total" class="input" type="number" value="60"></div><div><label>分段数量</label><input id="parts" class="input" type="number" value="4" min="1"></div></div>
+        <div style="height:8px"></div>
+        <label>单段目标时长</label><input id="partDuration" class="input" value="15" readonly>
+      </div>
+      <div class="section"><h3>上游素材</h3><div class="chipwrap"><span class="chip active">文本 · 产品创意</span><span class="chip active">图片 · 产品正面</span><span class="chip active">图片 · 细节图</span><span class="chip">图片 · 场景图</span></div></div>
+      <div class="section"><h3>预设提示词</h3><select class="select"><option>高端电商快节奏</option><option>口播转化型</option><option>剧情反转型</option><option>产品功能演示</option></select><div style="height:8px"></div><textarea class="textarea">前三秒直击痛点；镜头语言高级；全程保持产品一致性；旁白简洁有力；避免廉价广告感。</textarea><div class="small" style="margin-top:6px">节点内置提示词仅负责返回格式和硬约束；这里的预设才负责创意风格。</div></div>
+      <div class="section"><h3>建议增加</h3><div class="chipwrap"><span class="chip">节奏强度</span><span class="chip">是否旁白</span><span class="chip">画幅</span><span class="chip">语言</span><span class="chip">镜头数量上限</span><span class="chip">CTA位置</span></div></div>
+    </aside>
+
+    <main class="card main">
+      <div class="node">
+        <div class="nodehead"><div class="nodeicon">🎬</div><div><strong>视频脚本</strong><div class="meta">Text + Images → Structured Storyboard</div></div><div class="grow"></div><button class="btn">模型：GPT-5.6</button><button class="btn primary" onclick="generateMock()">生成脚本</button></div>
+        <div class="toolbar"><button class="btn" onclick="openTable()">查看完整表格</button><button class="btn">预设管理</button><button class="btn">重新校验时长</button><button class="btn green" onclick="splitMock()">一键生成分段文本节点</button></div>
+        <div class="summary"><div class="metric"><b id="shotCount">40</b><span>镜头数</span></div><div class="metric"><b id="durationSum">60.0s</b><span>脚本总时长</span></div><div class="metric"><b>1–3s</b><span>单镜头约束</span></div><div class="metric"><b>4 × 15s</b><span>输出分段</span></div><div class="metric"><b style="color:var(--ok)">通过</b><span>时长校验</span></div></div>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th>段</th><th>时长</th><th>画面/动作</th><th>台词/旁白</th><th>景别</th><th>运镜</th><th>音效/音乐</th></tr></thead><tbody id="miniRows"></tbody></table></div>
+        <div class="foot"><span class="hint">节点正文只做脚本摘要；完整内容在弹窗表格中编辑。拆分时按镜头顺序装箱，保证每段 ≤ 15 秒。</span><div class="grow"></div><button class="btn" onclick="openTable()">编辑 40 个镜头</button></div>
+      </div>
+      <div id="splitArea"></div>
+    </main>
+  </div>
+</div></div>
+
+<div id="tableModal" class="modal"><div class="dialog"><div class="dialoghead"><strong>完整视频脚本表格</strong><span class="small" style="margin-left:10px">可直接修改；保存后重新计算分段</span><button class="btn close" onclick="closeTable()">关闭</button></div><div class="dialogbody"><table><thead><tr><th>#</th><th>段</th><th>时长</th><th>画面描述</th><th>台词/旁白</th><th>景别</th><th>机位</th><th>运镜</th><th>首帧提示词</th><th>视频提示词</th><th>声音</th><th>衔接</th></tr></thead><tbody id="fullRows"></tbody></table></div><div class="foot"><button class="btn">+ 添加镜头</button><button class="btn">自动修正超时镜头</button><div class="grow"></div><button class="btn primary" onclick="closeTable()">保存修改</button></div></div></div>
+
+<script>
+const shots = Array.from({length:40},(_,i)=>({n:i+1,d:i===39?1.5:(i%3===0?2:i%3===1?1.5:1),visual:['痛点特写：久坐后腰背疲劳','产品轮廓与材质快速展示','真人落座，靠垫贴合腰背','侧面展示支撑曲线','功能细节与回弹特写'][i%5],voice:['久坐一整天，腰背早就开始抗议。','不是更软，而是更懂你的支撑。','坐下的一刻，腰部被稳稳托住。','贴合脊柱曲线，减少悬空压力。','把舒服，变成每天都能感受到的标准。'][i%5],size:['特写','近景','中景','侧面中景','微距'][i%5],motion:['快速推进','横移扫过','轻微环绕','定机+人物动作','微距拉焦'][i%5]}));
+function computeSegments(){
+  const parts=Math.max(1,Number(document.querySelector('#parts').value)||4);
+  const target=(Number(document.querySelector('#total').value)||60)/parts;
+  const result=[]; let current=[]; let sum=0;
+  for(const shot of shots){
+    if(current.length && sum+shot.d>target+0.0001 && result.length<parts-1){result.push({shots:current,duration:sum});current=[];sum=0}
+    current.push(shot);sum+=shot.d;
+  }
+  result.push({shots:current,duration:sum});
+  while(result.length<parts) result.push({shots:[],duration:0});
+  return result;
+}
+function rebuild(){
+  const total=Number(document.querySelector('#total').value)||60, parts=Math.max(1,Number(document.querySelector('#parts').value)||4);
+  document.querySelector('#partDuration').value=(total/parts).toFixed(2);
+  document.querySelector('#durationSum').textContent=shots.reduce((a,s)=>a+s.d,0).toFixed(1)+'s';
+  document.querySelector('#miniRows').innerHTML=shots.slice(0,8).map((s,i)=>row(s,i,true)).join('');
+  document.querySelector('#fullRows').innerHTML=shots.map((s,i)=>row(s,i,false)).join('');
+}
+function segmentOf(index){
+  const groups=computeSegments();
+  const shot=shots[index];
+  const found=groups.findIndex(g=>g.shots.includes(shot));
+  return found>=0?found+1:1;
+}
+function row(s,i,mini){const seg=Math.min(Number(document.querySelector('#parts').value)||4,segmentOf(i));return `<tr><td>${s.n}</td><td><span class="seg">P${seg}</span></td><td><span class="duration good">${s.d.toFixed(1)}s</span></td><td><textarea>${s.visual}</textarea></td><td><textarea>${s.voice}</textarea></td><td><input value="${s.size}"></td>${mini?`<td><input value="${s.motion}"></td><td><input value="节奏型音乐"></td>`:`<td><input value="略低机位"></td><td><input value="${s.motion}"></td><td><textarea>${s.visual}，产品一致性，高级商业摄影</textarea></td><td><textarea>${s.visual}；${s.motion}；自然真实动作</textarea></td><td><input value="节奏型音乐+轻微环境声"></td><td><input value="动作连续"></td>`}</tr>`}
+function openTable(){document.querySelector('#tableModal').classList.add('open')}
+function closeTable(){document.querySelector('#tableModal').classList.remove('open')}
+function generateMock(){alert('原型：这里会读取上游文本/图片 + 节点预设 + 时长配置，调用文本模型并解析为结构化 Storyboard JSON。')}
+function splitMock(){const groups=computeSegments();let html='<div class="splitgrid">';groups.forEach((g,i)=>{const first=g.shots[0]?.n??'-',last=g.shots[g.shots.length-1]?.n??'-';html+=`<div class="splitcard"><h4>文本节点 · 第 ${i+1} 段</h4><p>${g.duration.toFixed(1)} 秒 · 镜头 ${first}–${last} · 共 ${g.shots.length} 镜</p><div style="margin-top:10px" class="small">按累计时长切分，保持镜头顺序；该段文本可直接连接 RunningHub / 视频模型节点。</div></div>`});html+='</div>';document.querySelector('#splitArea').innerHTML=html}
+document.querySelectorAll('#total,#parts').forEach(el=>el.addEventListener('input',rebuild));rebuild();
+</script>
+</body></html>

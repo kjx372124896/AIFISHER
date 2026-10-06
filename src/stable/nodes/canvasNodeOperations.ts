@@ -97,7 +97,7 @@ export function createCanvasNode(
         ? video
         : type === 'Audio'
           ? audio
-          : type === 'Text'
+          : type === 'Text' || type === 'Video Script'
             ? text
             : undefined;
   const template = type === 'ComfyUI' ? runtime.templates[0] : undefined;
@@ -111,11 +111,15 @@ export function createCanvasNode(
     imageModel: type === 'Image' ? image?.name : undefined,
     videoModel: type === 'Video' ? video?.name : undefined,
     audioModel: type === 'Audio' ? audio?.name : undefined,
-    textModel: type === 'Text' ? text?.name : undefined,
+    textModel: type === 'Text' || type === 'Video Script' ? text?.name : undefined,
     imageMode: type === 'Image' ? (image?.imageModes?.[0]?.value ?? 'text-to-image') : undefined,
     videoMode: type === 'Video' ? (video?.videoModes?.[0]?.value ?? 'text-to-video') : undefined,
     audioMode: type === 'Audio' ? (audio?.audioModes?.[0]?.value ?? 'instrumental') : undefined,
-    textMode: type === 'Text' ? (text?.languageModes?.[0]?.value ?? 'multimodal-chat') : undefined,
+    textMode: type === 'Text' || type === 'Video Script' ? (text?.languageModes?.[0]?.value ?? 'multimodal-chat') : undefined,
+    videoScriptMinShot: type === 'Video Script' ? 1 : undefined,
+    videoScriptMaxShot: type === 'Video Script' ? 3 : undefined,
+    videoScriptTotalDuration: type === 'Video Script' ? 60 : undefined,
+    videoScriptSegmentCount: type === 'Video Script' ? 4 : undefined,
     comfyMode: template?.id,
     isCameraUIOpen: type === 'ComfyUI' ? true : undefined,
     aspectRatio: type === 'Video' ? '16:9' : '1:1',

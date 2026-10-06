@@ -1547,6 +1547,30 @@ export function CanvasApplication(React: Runtime, dependencies: Dependencies) {
         onResizeStart: handleResizeStart,
         onUpdateNode: updateNode,
         onGenerate: handleGenerate,
+        onCreateVideoScriptSegments: (sourceId: string, segments: Array<{ title: string; text: string; duration: number }>) => {
+          if (!workflowId || view !== 'canvas') return;
+          const source = getNodes().find((node) => node.id === sourceId);
+          if (!source || source.type !== 'Video Script') return;
+          const created = segments.map((segment, index) => {
+            const output = createAgentNode(
+              'Text',
+              { x: source.x + 720, y: source.y + index * 330 },
+              workflowId,
+            );
+            output.title = segment.title;
+            output.textContent = segment.text;
+            output.resultText = segment.text;
+            output.textMode = 'editing';
+            output.parentIds = [sourceId];
+            output.videoScriptSourceNodeId = sourceId;
+            output.videoScriptSegmentIndex = index;
+            output.videoScriptSegmentDuration = segment.duration;
+            return output;
+          });
+          if (!created.length) return;
+          setNodes((current) => [...current, ...created]);
+          setSelectedNodeIds(created.map((node) => node.id));
+        },
         onAddNext: handleAddNext,
         getCommonGroup,
         onSaveAsset: handleOpenCreateAsset,

@@ -498,14 +498,21 @@ function renderModels(
     head.append(clear);
     discovered.append(head);
 
+    // 一次拉取可能有几百个模型：列表自己滚动，避免把整个设置页撑成一条长长的滚动条。
+    const discoveredList = document.createElement('div');
+    discoveredList.className = 'max-h-[420px] overflow-y-auto overscroll-contain custom-scrollbar';
+
     for (const upstreamModelId of ui.discoveredModels) {
       const row = document.createElement('div');
+      // 供应商页面嵌在设置弹窗的窄栏里，可用宽度只有 500px 上下。这里不用固定列宽的网格：
+      // 外层是“模型 ID + 控件组”的可换行弹性行，控件组自己也允许换行，所以栏位再窄也只是折行，
+      // 不会把协议选择和“添加”按钮挤出面板之外。
       row.className =
-        'grid items-start gap-3 border-b border-[var(--af-border)] px-5 py-3 last:border-b-0 lg:grid-cols-[minmax(240px,1.4fr)_120px_220px_auto]';
+        'flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-[var(--af-border)] px-4 py-2 last:border-b-0';
       const modelName = textElement(
         'code',
         upstreamModelId,
-        'min-w-0 whitespace-normal break-all text-xs leading-5 text-[var(--af-text)]',
+        'min-w-0 flex-[1_1_160px] whitespace-normal break-all text-xs leading-5 text-[var(--af-text)]',
       );
       modelName.title = upstreamModelId;
       const capability = selectField(
@@ -519,14 +526,25 @@ function renderModels(
         protocolOptions(state, capability.value as Capability),
         '',
       );
+      const controls = document.createElement('div');
+      controls.className = 'flex min-w-0 flex-[3_1_340px] flex-wrap items-center gap-1.5';
+      const capabilityCell = document.createElement('div');
+      capabilityCell.className = 'w-[84px] shrink-0';
+      capabilityCell.append(capability);
+      const protocolCell = document.createElement('div');
+      protocolCell.className = 'min-w-0 flex-1';
+      protocolCell.append(protocol);
       const sync = () => {
         protocol.replaceChildren();
         const options = protocolOptions(state, capability.value as Capability);
         for (const option of options) protocol.add(new Option(option.label, option.value));
+        // 原生 select 里的长协议名在窄栏中仍可能被截断，标题兜底显示完整文本。
+        protocol.title = protocol.selectedOptions[0]?.textContent || '';
       };
       capability.addEventListener('change', sync);
       sync();
       const addOne = button('添加');
+      addOne.className += ' shrink-0';
       addOne.addEventListener('click', async () => {
         addOne.disabled = true;
         try {
@@ -549,16 +567,18 @@ function renderModels(
           addOne.disabled = false;
         }
       });
-      row.append(modelName, capability, protocol, addOne);
-      discovered.append(row);
+      controls.append(capabilityCell, protocolCell, addOne);
+      row.append(modelName, controls);
+      discoveredList.append(row);
     }
+    discovered.append(discoveredList);
     root.append(discovered);
   }
 
   const list = panel();
   list.className += ' overflow-hidden';
   const listHead = document.createElement('div');
-  listHead.className = 'grid grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_auto] gap-3 border-b border-[var(--af-border)] px-5 py-3 text-xs font-medium text-[var(--af-text-muted)]';
+  listHead.className = 'grid grid-cols-[minmax(0,1fr)_72px_minmax(140px,1.4fr)_116px] gap-3 border-b border-[var(--af-border)] px-5 py-3 text-xs font-medium text-[var(--af-text-muted)]';
   listHead.append(
     textElement('span', '模型'),
     textElement('span', '类型'),
@@ -582,13 +602,16 @@ function renderModels(
     for (const model of currentModels) {
       const row = document.createElement('div');
       row.className =
-        'grid grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--af-border)] px-5 py-3 last:border-b-0';
+        'grid grid-cols-[minmax(0,1fr)_72px_minmax(140px,1.4fr)_116px] items-center gap-3 border-b border-[var(--af-border)] px-5 py-3 last:border-b-0';
       const identity = document.createElement('div');
       identity.className = 'min-w-0';
       identity.append(
         textElement('div', model.name, 'truncate text-sm font-medium text-[var(--af-text)]'),
         textElement('code', model.upstreamModelId, 'mt-1 block truncate text-[11px] text-[var(--af-text-muted)]'),
       );
+      identity.title = `${model.name}\n${model.upstreamModelId}`;
+      const capabilityBadge = badge(CAPABILITY_LABEL[model.capability]);
+      capabilityBadge.className += ' justify-self-start';
       const modelActions = document.createElement('div');
       modelActions.className = 'flex gap-1';
       const edit = button('编辑', 'ghost');
@@ -607,10 +630,17 @@ function renderModels(
         await rerender();
       });
       modelActions.append(edit, remove);
+      const protocolLabel = protocols.get(model.protocolId)?.label || model.protocolId;
+      const protocolCell = textElement(
+        'span',
+        protocolLabel,
+        'truncate text-xs text-[var(--af-text-secondary)]',
+      );
+      protocolCell.title = protocolLabel;
       row.append(
         identity,
-        badge(CAPABILITY_LABEL[model.capability]),
-        textElement('span', protocols.get(model.protocolId)?.label || model.protocolId, 'truncate text-xs text-[var(--af-text-secondary)]'),
+        capabilityBadge,
+        protocolCell,
         modelActions,
       );
       list.append(row);

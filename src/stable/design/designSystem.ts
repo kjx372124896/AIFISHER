@@ -796,11 +796,11 @@ input.fisherai-key-input:focus { border-color: var(--af-focus); background: var(
 }
 @media (min-width: 2560px) {
   [data-fisherai-shell="projects"] main { max-width: 1600px !important; }
-  [data-fisherai-settings="true"] { max-width: 1280px !important; }
+  [data-fisherai-settings="true"] { max-width: 1360px !important; }
 }
 
 /* The existing settings page uses one measured navigation/content layout. */
-[data-fisherai-settings="true"] { width: min(1080px, calc(100vw - 48px)) !important; height: min(760px, calc(100dvh - 64px)) !important; max-height: calc(100dvh - 32px); background: var(--af-input) !important; border: 1px solid var(--af-border) !important; border-radius: 12px !important; overflow: hidden; font-size: 14px; }
+[data-fisherai-settings="true"] { width: min(1200px, calc(100vw - 48px)) !important; height: min(760px, calc(100dvh - 64px)) !important; max-height: calc(100dvh - 32px); background: var(--af-input) !important; border: 1px solid var(--af-border) !important; border-radius: 12px !important; overflow: hidden; font-size: 14px; }
 [data-fisherai-settings-sidebar] { width: 200px !important; flex: 0 0 200px !important; padding: 24px 12px !important; background: var(--af-input) !important; }
 [data-fisherai-settings-sidebar] > div:first-child { padding: 0 12px 20px !important; color: var(--af-text) !important; font-size: 18px !important; }
 [data-fisherai-settings-sidebar] nav { gap: 6px !important; }

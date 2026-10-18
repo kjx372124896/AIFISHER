@@ -1,2 +1,2 @@
 import {defineConfig} from 'vitest/config';
-export default defineConfig({test:{include:['tests/community.test.js'],environment:'node'}});
+export default defineConfig({test:{include:['tests/**/*.test.js'],environment:'node'}});

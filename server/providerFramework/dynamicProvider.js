@@ -1,6 +1,7 @@
 import { BaseProvider } from '../providers/baseProvider.js';
 import { providerFrameworkStore } from './store.js';
 import { protocolById } from './protocols.js';
+import { isTaskProtocolAdapter, runTaskProtocol, taskProtocolSpec } from './taskProtocols.js';
 
 function joinUrl(baseUrl, path) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
@@ -219,8 +220,26 @@ async function imageResultToBuffer(entry, params) {
   };
 }
 
+async function generateTaskMedia(kind, params, runtime) {
+  const { provider, protocol, model } = runtime;
+  const spec = taskProtocolSpec(protocol.adapter);
+  if (!spec) throw new Error('未知的异步任务协议');
+  return runTaskProtocol({
+    spec,
+    provider,
+    protocol,
+    model,
+    params,
+    request: (target, options) => fetchJson(target, options, params),
+    download: (target) =>
+      BaseProvider.asyncDownloadToBuffer(target, params.useProxy, { signal: params.signal }),
+    timeoutMs: BaseProvider.parseTimeToMs(params.timeEstimate || (kind === 'image' ? '5min' : '20min')),
+  });
+}
+
 async function generateImage(params) {
-  const { provider, protocol, model } = runtimeFor(params);
+  const runtime = runtimeFor(params);
+  const { provider, protocol, model } = runtime;
   if (protocol.adapter === 'openai-images') {
     const images = BaseProvider.resolveInputImages(params.images || params.imageBase64 || []);
     const desiredCount = Math.max(1, Math.trunc(Number(params.generateCount) || 1));
@@ -266,6 +285,7 @@ async function generateImage(params) {
     }
     return Promise.all(entries.map((entry) => imageResultToBuffer(entry, params)));
   }
+  if (isTaskProtocolAdapter(protocol.adapter)) return generateTaskMedia('image', params, runtime);
   return generateDeclarativeMedia('image', params, { provider, protocol, model });
 }
 
@@ -341,6 +361,16 @@ async function generateDeclarativeMedia(kind, params, runtime = runtimeFor(param
 export const DynamicProtocolProvider = Object.freeze({
   generateText,
   generateImage,
-  generateVideo: (params) => generateDeclarativeMedia('video', params),
-  generateAudio: (params) => generateDeclarativeMedia('audio', params),
+  generateVideo: (params) => {
+    const runtime = runtimeFor(params);
+    return isTaskProtocolAdapter(runtime.protocol.adapter)
+      ? generateTaskMedia('video', params, runtime)
+      : generateDeclarativeMedia('video', params, runtime);
+  },
+  generateAudio: (params) => {
+    const runtime = runtimeFor(params);
+    return isTaskProtocolAdapter(runtime.protocol.adapter)
+      ? generateTaskMedia('audio', params, runtime)
+      : generateDeclarativeMedia('audio', params, runtime);
+  },
 });

@@ -1,4 +1,9 @@
 import { createStableTextElement as textElement } from '../design/dom';
+import {
+  isTaskRelayBaseUrl,
+  suggestModelPreset,
+  suggestProtocolId,
+} from './providerFrameworkPresets';
 
 type Capability = 'text' | 'image' | 'video' | 'audio';
 type Provider = {
@@ -487,9 +492,17 @@ function renderModels(
     discovered.className += ' overflow-hidden';
     const head = document.createElement('div');
     head.className = 'flex items-center justify-between border-b border-[var(--af-border)] px-5 py-4';
-    head.append(
+    const headInfo = document.createElement('div');
+    headInfo.className = 'min-w-0';
+    headInfo.append(
       textElement('strong', `发现的新模型（${ui.discoveredModels.length}）`, 'text-sm text-[var(--af-text)]'),
+      textElement(
+        'p',
+        '已按模型名预选类型与协议，逐行确认后点“添加”。',
+        'mt-0.5 text-[11px] leading-5 text-[var(--af-text-muted)]',
+      ),
     );
+    head.append(headInfo);
     const clear = button('收起', 'ghost');
     clear.addEventListener('click', () => {
       ui.discoveredModels = [];
@@ -501,6 +514,7 @@ function renderModels(
     // 一次拉取可能有几百个模型：列表自己滚动，避免把整个设置页撑成一条长长的滚动条。
     const discoveredList = document.createElement('div');
     discoveredList.className = 'max-h-[420px] overflow-y-auto overscroll-contain custom-scrollbar';
+    const relay = isTaskRelayBaseUrl(provider.baseUrl);
 
     for (const upstreamModelId of ui.discoveredModels) {
       const row = document.createElement('div');
@@ -515,17 +529,16 @@ function renderModels(
         'min-w-0 flex-[1_1_160px] whitespace-normal break-all text-xs leading-5 text-[var(--af-text)]',
       );
       modelName.title = upstreamModelId;
+      // 按模型名族预选类型和协议：中转站一次能拉出几百个模型，逐行手改不现实。
+      const preset = suggestModelPreset(upstreamModelId, provider.baseUrl);
       const capability = selectField(
         (Object.keys(CAPABILITY_LABEL) as Capability[]).map((value) => ({
           label: CAPABILITY_LABEL[value],
           value,
         })),
-        upstreamModelId.toLowerCase().includes('image') ? 'image' : 'text',
+        preset.capability,
       );
-      const protocol = selectField(
-        protocolOptions(state, capability.value as Capability),
-        '',
-      );
+      const protocol = selectField(protocolOptions(state, capability.value as Capability), preset.protocolId);
       const controls = document.createElement('div');
       controls.className = 'flex min-w-0 flex-[3_1_340px] flex-wrap items-center gap-1.5';
       const capabilityCell = document.createElement('div');
@@ -535,9 +548,11 @@ function renderModels(
       protocolCell.className = 'min-w-0 flex-1';
       protocolCell.append(protocol);
       const sync = () => {
+        const current = capability.value as Capability;
+        const suggested = suggestProtocolId(current, upstreamModelId, { relay });
         protocol.replaceChildren();
-        const options = protocolOptions(state, capability.value as Capability);
-        for (const option of options) protocol.add(new Option(option.label, option.value));
+        for (const option of protocolOptions(state, current))
+          protocol.add(new Option(option.label, option.value, false, option.value === suggested));
         // 原生 select 里的长协议名在窄栏中仍可能被截断，标题兜底显示完整文本。
         protocol.title = protocol.selectedOptions[0]?.textContent || '';
       };

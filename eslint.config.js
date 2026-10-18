@@ -33,6 +33,13 @@ export default tseslint.config(
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
+    // Vitest test files run under Node and may use Buffers and Web APIs (FormData/Blob).
+    files: ['tests/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      globals: { ...globals.node, FormData: 'readonly', Blob: 'readonly', fetch: 'readonly' },
+    },
+  },
+  {
     files: ['scripts/**/*.{js,mjs,cjs}', 'services/**/*.{js,mjs,cjs}', '*.config.{js,mjs,cjs}'],
     languageOptions: {
       globals: globals.node,

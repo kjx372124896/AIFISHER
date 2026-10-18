@@ -1,3 +1,5 @@
+import { TASK_PROTOCOLS } from './taskProtocols.js';
+
 export const BUILTIN_PROTOCOLS = Object.freeze([
   {
     id: 'openai-chat-completions',
@@ -24,6 +26,10 @@ export const BUILTIN_PROTOCOLS = Object.freeze([
     editPath: '/v1/images/edits',
     contentType: 'application/json',
   },
+  // 「提交任务 → 轮询 → 取直链」的异步任务协议（Seedance 中转等）。图片/视频/音频
+  // 分别对应 /v1/image/generations、/v1/videos、/v1/video/generations、/v1/audio/generations，
+  // 另外补充 Suno 音乐与 Midjourney 两组独立接口。
+  ...TASK_PROTOCOLS,
 ]);
 
 export function protocolById(state, id) {

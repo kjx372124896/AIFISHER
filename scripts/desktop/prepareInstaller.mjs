@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -118,5 +118,13 @@ await run(
 
 // 发布前真实验证 native 依赖和服务入口都能被 Node 加载。
 await run(process.execPath, ['-e', "Promise.all([import('sharp'),import('sqlite3')]).then(()=>console.log('native dependencies ready'))"], appRoot);
+
+// sharp 的 libvips DLL 是独立文件，导入检查在部分环境下仍可能通过；这里显式要求它存在，
+// 避免把"装完打不开"的包发出去。
+const sharpLibDir = path.join(appRoot, 'node_modules', '@img', 'sharp-win32-x64', 'lib');
+const sharpLibEntries = await readdir(sharpLibDir).catch(() => []);
+if (!sharpLibEntries.some((name) => /^libvips.*\.dll$/i.test(name))) {
+  throw new Error(`安装包暂存目录缺少 libvips DLL：${sharpLibDir}`);
+}
 
 console.log(`AIFISHER installer staging ready: ${appRoot}`);

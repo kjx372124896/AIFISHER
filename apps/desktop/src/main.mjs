@@ -33,6 +33,7 @@ import { confirmUpdateStartup } from './updates/startupConfirmation.mjs';
 import updaterPackage from 'electron-updater';
 import { createGithubUpdateCoordinator } from './updates/githubUpdateCoordinator.mjs';
 import { activateUpdateWindow, shouldDeferLaunch } from './updates/updateLaunchGuard.mjs';
+import { findMissingNativePayload, missingNativePayloadMessage } from './nativePayloadCheck.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const installation = resolveInstallation({
@@ -68,6 +69,7 @@ let quitting = false;
 let canvasOpen = false;
 let backendRetryTimer = null;
 let updateHandoff = null;
+let rendererCrashReported = false;
 
 function broadcast(channel, payload) {
   if (appContents && !appContents.isDestroyed()) appContents.send(channel, payload);
@@ -290,6 +292,21 @@ function registerIpc() {
 }
 
 async function start() {
+  // 安全软件可能在安装/更新后隔离 DLL，导致界面进程崩溃或本机服务起不来。
+  // 先显式核对运行所需文件，缺失时直接给出可执行的提示，而不是静默退出。
+  if (installation.packaged) {
+    const missingNativeFiles = await findMissingNativePayload({
+      executablePath: process.execPath,
+      resourcesPath: process.resourcesPath,
+    });
+    if (missingNativeFiles.length) {
+      const error = new Error(
+        missingNativePayloadMessage(missingNativeFiles, { installRoot: installation.root }),
+      );
+      error.nativeMissing = missingNativeFiles;
+      throw error;
+    }
+  }
   helpers = await loadReleaseHelpers(installation.tools);
   productVersion = await Promise.resolve()
     .then(() => helpers.loadProductVersion(releasePaths(installation)))
@@ -379,6 +396,26 @@ if (deferredForUpdate) {
     if (argv.includes('--quit')) app.quit();
     else showWindow();
   });
+  // 界面进程崩溃时给出可读原因（缺 DLL 时 Electron 只会打印一行英文日志就退出）。
+  app.on('render-process-gone', (_event, _contents, details) => {
+    console.error('AIFISHER 渲染进程退出', details);
+    if (details?.reason === 'clean-exit' || rendererCrashReported) return;
+    rendererCrashReported = true;
+    try {
+      dialog.showErrorBox(
+        'AIFISHER 界面进程异常退出',
+        [
+          `原因：${details?.reason || 'unknown'}${details?.exitCode === undefined ? '' : `（退出码 ${details.exitCode}）`}`,
+          '',
+          '如果安装或更新后一直打不开，通常是安全软件隔离了安装目录中的 DLL（ffmpeg / vulkan / libvips 等）。',
+          `请把安装目录加入信任区后重新运行安装包：${installation.root}`,
+          `日志目录：${installation.logs}`,
+        ].join('\n'),
+      );
+    } catch {
+      // 对话框本身失败时至少保留上面的 console 记录。
+    }
+  });
   app.on('will-quit', () => {
     tray?.destroy();
     tray = null;
@@ -395,6 +432,25 @@ if (deferredForUpdate) {
     .then(start)
     .catch((error) => {
       console.error('AIFISHER 启动失败', error);
+      reportStartupFailure(error);
       app.exit(1);
     });
+}
+
+function reportStartupFailure(error) {
+  const message = error?.nativeMissing
+    ? String(error.message)
+    : [
+        'AIFISHER 启动失败。',
+        '',
+        String(error?.message || error || '').slice(0, 600),
+        '',
+        `日志目录：${installation.logs}`,
+        '如果是安装或更新后第一次启动，请确认安全软件没有隔离安装目录中的 DLL。',
+      ].join('\n');
+  try {
+    dialog.showErrorBox('AIFISHER 无法启动', message);
+  } catch {
+    // 无法弹窗时保留 console 输出即可。
+  }
 }

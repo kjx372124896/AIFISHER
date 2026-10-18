@@ -1,7 +1,21 @@
 import { BaseProvider } from '../providers/baseProvider.js';
+import {
+  isRecoverableProvider,
+  matchesRemoteTask,
+  remoteTaskReference,
+} from '../generation/generationTaskRecovery.js';
 import { providerFrameworkStore } from './store.js';
 import { protocolById } from './protocols.js';
-import { isTaskProtocolAdapter, runTaskProtocol, taskProtocolSpec } from './taskProtocols.js';
+import {
+  collectResultUrls,
+  downloadTaskResult,
+  fetchTaskSnapshot,
+  isTaskProtocolAdapter,
+  readTaskFailure,
+  readTaskStatus,
+  runTaskProtocol,
+  taskProtocolSpec,
+} from './taskProtocols.js';
 
 function joinUrl(baseUrl, path) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
@@ -220,7 +234,117 @@ async function imageResultToBuffer(entry, params) {
   };
 }
 
-async function generateTaskMedia(kind, params, runtime) {
+const DYNAMIC_PROVIDER_NAME = 'DynamicProtocolProvider';
+
+/** 收集当前配置里所有走异步任务协议的模型（恢复流程要按指纹重新匹配它们）。 */
+function taskRuntimes(kind) {
+  const state = providerFrameworkStore.read();
+  const runtimes = [];
+  for (const model of state.models) {
+    if (model.capability !== kind) continue;
+    const protocol = protocolById(state, model.protocolId);
+    if (!protocol || !isTaskProtocolAdapter(protocol.adapter)) continue;
+    const provider = state.providers.find((item) => item.id === model.providerId);
+    if (!provider) continue;
+    runtimes.push({ provider, protocol, model });
+  }
+  return runtimes;
+}
+
+function taskRecoveryContext(runtime, taskId) {
+  const { provider, protocol, model } = runtime;
+  return {
+    taskId,
+    providerName: DYNAMIC_PROVIDER_NAME,
+    modelId: model.id,
+    submitUrl: joinUrl(provider.baseUrl, protocol.createPath),
+    queryUrl: joinUrl(
+      provider.baseUrl,
+      String(protocol.pollPath || '').replace('{taskId}', encodeURIComponent(String(taskId))),
+    ),
+    apiKey: provider.apiKey,
+  };
+}
+
+function runtimeForReference(kind, reference, hint) {
+  if (!reference?.taskId) return null;
+  const runtimes = taskRuntimes(kind);
+  const preferred = hint
+    ? runtimes.filter((runtime) => runtime.model.upstreamModelId === hint || runtime.model.name === hint)
+    : [];
+  for (const runtime of [...preferred, ...runtimes]) {
+    try {
+      if (matchesRemoteTask(reference, taskRecoveryContext(runtime, reference.taskId))) return runtime;
+    } catch {
+      // 配置里的 URL 不合法时跳过这个候选。
+    }
+  }
+  return null;
+}
+
+export function canRecoverTask(kind, reference, hint) {
+  return Boolean(runtimeForReference(kind, reference, hint));
+}
+
+export async function recoverTask(kind, task, params, _config, signal, io = {}) {
+  const references = (kind === 'image' ? task.remoteTasks || [] : [task.remoteTask]).filter(Boolean);
+  if (!references.length) return { status: 'unknown' };
+  const useProxy = params?.useProxy === true || task.useProxy === true;
+  const request =
+    io.request || ((target, options) => fetchJson(target, options, { useProxy }));
+  const download =
+    io.download ||
+    ((target) => BaseProvider.asyncDownloadToBuffer(target, useProxy, { signal }));
+  const hint = kind === 'image' ? params?.imageModel : params?.videoModel;
+  const downloaded = [];
+  let pending = false;
+  let failureMessage = '';
+  for (const reference of references) {
+    const runtime = runtimeForReference(kind, reference, hint);
+    if (!runtime) return { status: 'unknown', reason: 'settings_changed' };
+    const spec = taskProtocolSpec(runtime.protocol.adapter);
+    if (!spec) return { status: 'unknown' };
+    const payload = await fetchTaskSnapshot({
+      spec,
+      provider: runtime.provider,
+      protocol: runtime.protocol,
+      taskId: reference.taskId,
+      request,
+      signal,
+    });
+    const status = readTaskStatus(spec, payload);
+    if (!status) {
+      pending = true;
+      continue;
+    }
+    if ((spec.failureStatuses || []).includes(status)) {
+      failureMessage = readTaskFailure(spec, payload, status);
+      continue;
+    }
+    if (!(spec.successStatuses || []).includes(status)) {
+      pending = true;
+      continue;
+    }
+    const urls = collectResultUrls(spec, payload);
+    if (!urls.length) {
+      pending = true;
+      continue;
+    }
+    for (const mediaUrl of urls) {
+      downloaded.push(await downloadTaskResult(spec, mediaUrl, download));
+    }
+  }
+  if (!downloaded.length) {
+    return pending
+      ? { status: 'pending' }
+      : { status: 'failed', error: new Error(failureMessage || '上游任务未返回结果') };
+  }
+  if (kind === 'video') return { status: 'success', buffer: downloaded[0].buffer, format: downloaded[0].format };
+  const requested = Math.max(1, Number(task.requestedCount) || references.length);
+  return { status: downloaded.length < requested ? 'partial' : 'success', results: downloaded };
+}
+
+async function generateTaskMedia(kind, params, runtime, config) {
   const { provider, protocol, model } = runtime;
   const spec = taskProtocolSpec(protocol.adapter);
   if (!spec) throw new Error('未知的异步任务协议');
@@ -234,10 +358,18 @@ async function generateTaskMedia(kind, params, runtime) {
     download: (target) =>
       BaseProvider.asyncDownloadToBuffer(target, params.useProxy, { signal: params.signal }),
     timeoutMs: BaseProvider.parseTimeToMs(params.timeEstimate || (kind === 'image' ? '5min' : '20min')),
+    // 提交、轮询、下载都可能中途断线：把上游任务编号报给框架后，画布可以稍后核对同一任务，
+    // 而不是让用户重新付费生成一次。
+    onBeforeSubmit: (slot) => config?.generationTaskSubmitting?.(slot),
+    onSubmitted: (taskId, slot) => {
+      const reference = remoteTaskReference(taskRecoveryContext(runtime, taskId));
+      if (reference) config?.generationTaskSubmitted?.(reference, slot);
+    },
+    markSubmissionUncertain: isRecoverableProvider(kind, DYNAMIC_PROVIDER_NAME),
   });
 }
 
-async function generateImage(params) {
+async function generateImage(params, config) {
   const runtime = runtimeFor(params);
   const { provider, protocol, model } = runtime;
   if (protocol.adapter === 'openai-images') {
@@ -285,7 +417,8 @@ async function generateImage(params) {
     }
     return Promise.all(entries.map((entry) => imageResultToBuffer(entry, params)));
   }
-  if (isTaskProtocolAdapter(protocol.adapter)) return generateTaskMedia('image', params, runtime);
+  if (isTaskProtocolAdapter(protocol.adapter))
+    return generateTaskMedia('image', params, runtime, config);
   return generateDeclarativeMedia('image', params, { provider, protocol, model });
 }
 
@@ -361,16 +494,21 @@ async function generateDeclarativeMedia(kind, params, runtime = runtimeFor(param
 export const DynamicProtocolProvider = Object.freeze({
   generateText,
   generateImage,
-  generateVideo: (params) => {
+  generateVideo: (params, config) => {
     const runtime = runtimeFor(params);
     return isTaskProtocolAdapter(runtime.protocol.adapter)
-      ? generateTaskMedia('video', params, runtime)
+      ? generateTaskMedia('video', params, runtime, config)
       : generateDeclarativeMedia('video', params, runtime);
   },
-  generateAudio: (params) => {
+  generateAudio: (params, config) => {
     const runtime = runtimeFor(params);
     return isTaskProtocolAdapter(runtime.protocol.adapter)
-      ? generateTaskMedia('audio', params, runtime)
+      ? generateTaskMedia('audio', params, runtime, config)
       : generateDeclarativeMedia('audio', params, runtime);
   },
+  // 断线后的核对入口：只要上游任务编号还在，就能取回已经生成好的结果，不必重新付费生成。
+  canRecoverImage: (reference, params) => canRecoverTask('image', reference, params?.imageModel),
+  recoverImage: (task, params, config, signal) => recoverTask('image', task, params, config, signal),
+  canRecoverVideo: (reference, params) => canRecoverTask('video', reference, params?.videoModel),
+  recoverVideo: (task, params, config, signal) => recoverTask('video', task, params, config, signal),
 });

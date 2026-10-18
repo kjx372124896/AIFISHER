@@ -169,10 +169,23 @@ async function resolveAssets(spec, { params, request, url, authHeaders, signal }
   const images = BaseProvider.resolveInputImages(params.images || params.imageBase64 || []).slice(0, 16);
   const videos = BaseProvider.resolveInputVideos(params.videos || params.videoUrl || []).slice(0, 4);
   const audios = BaseProvider.resolveInputAudios(params.audios || params.audioBase64 || []).slice(0, 4);
+  const upload = async (item) => {
+    try {
+      return await ensurePublicAsset(item, options);
+    } catch (error) {
+      if (error?.code === 'REFERENCE_UPLOAD_FAILED') throw error;
+      // 统一成框架认识的诊断码：这类失败发生在提交之前，不会产生上游扣费。
+      throw Object.assign(new Error(error?.message || '参考素材上传失败'), {
+        code: 'REFERENCE_UPLOAD_FAILED',
+        status: Number(error?.status) || 0,
+        cause: error?.cause,
+      });
+    }
+  };
   const [uploadedImages, uploadedVideos, uploadedAudios] = await Promise.all([
-    Promise.all(images.map((item) => ensurePublicAsset(item, options))),
-    Promise.all(videos.map((item) => ensurePublicAsset(item, options))),
-    Promise.all(audios.map((item) => ensurePublicAsset(item, options))),
+    Promise.all(images.map((item) => upload(item))),
+    Promise.all(videos.map((item) => upload(item))),
+    Promise.all(audios.map((item) => upload(item))),
   ]);
   return {
     images: uploadedImages.filter((item) => HTTP_URL.test(item)),
@@ -389,6 +402,28 @@ async function downloadResult(spec, mediaUrl, download) {
   return { buffer, format: formatForUrl(spec, mediaUrl) };
 }
 
+/** 结果下载也对外暴露，恢复流程复用同一套格式推断。 */
+export async function downloadTaskResult(spec, mediaUrl, download) {
+  return downloadResult(spec, mediaUrl, download);
+}
+
+function authHeadersFor(provider) {
+  return {
+    ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+    ...(provider.headers || {}),
+  };
+}
+
+/** 只查询一次任务状态；恢复流程按轮询间隔反复调用它，返回 pending 时由上层继续等待。 */
+export async function fetchTaskSnapshot({ spec, provider, taskId, request, signal }) {
+  const pollPath = String(spec.pollPath).replace(/\{taskId\}/g, encodeURIComponent(String(taskId)));
+  return request(resolveUrl(provider.baseUrl, pollPath), {
+    method: 'GET',
+    headers: authHeadersFor(provider),
+    signal,
+  });
+}
+
 /**
  * 执行一次异步任务协议：提交 → 轮询 → 下载结果。
  * 图片族支持 generateCount > 1（逐张提交，兼容不支持 n 的模型）。
@@ -402,11 +437,11 @@ export async function runTaskProtocol({
   request,
   download,
   timeoutMs,
+  onBeforeSubmit,
+  onSubmitted,
+  markSubmissionUncertain = false,
 }) {
-  const authHeaders = {
-    ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-    ...(provider.headers || {}),
-  };
+  const authHeaders = authHeadersFor(provider);
   const jsonHeaders = {
     ...(protocol.contentType ? { 'Content-Type': protocol.contentType } : {}),
     ...authHeaders,
@@ -424,18 +459,28 @@ export async function runTaskProtocol({
   const results = [];
   for (let index = 0; index < count; index += 1) {
     const body = buildTaskBody(spec.bodyKind, modelId, assets, params);
-    const created = await request(url(spec.createPath), {
-      method: protocol.method || 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify(body),
-      signal,
-    });
+    onBeforeSubmit?.(index);
+    let created;
+    try {
+      created = await request(url(spec.createPath), {
+        method: protocol.method || 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (error) {
+      // 没有任何 HTTP 响应时无法判断上游是否已经接单：只有框架能核对远端任务时才标记
+      // 「提交未确认」，否则按普通网络错误返回，避免任务卡在无法核对的未知状态。
+      if (markSubmissionUncertain && !Number(error?.status)) error.submissionUncertain = true;
+      throw error;
+    }
 
     let finalPayload = created;
     const immediate = collectResultUrls(spec, created);
     if (!immediate.length) {
       const taskId = readTaskId(spec, created);
       if (!taskId) throw new Error('提交成功但没有返回任务 ID，无法继续轮询');
+      onSubmitted?.(taskId, index);
       finalPayload = await pollTask({ spec, taskId, request, baseUrl, authHeaders, signal, timeoutMs });
     }
 

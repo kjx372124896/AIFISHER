@@ -106,7 +106,18 @@ export const BaseProvider = {
      */
     isRetryableNetworkError(error) {
         const code = error?.cause?.code || error?.code;
-        const retryableCodes = ['UND_ERR_SOCKET', 'ECONNRESET', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'];
+        const retryableCodes = [
+            'UND_ERR_SOCKET',
+            'ECONNRESET',
+            'ETIMEDOUT',
+            'UND_ERR_CONNECT_TIMEOUT',
+            'UND_ERR_HEADERS_TIMEOUT',
+            'UND_ERR_BODY_TIMEOUT',
+            'UND_ERR_CLOSED',
+            'ECONNREFUSED',
+            'ENOTFOUND',
+            'EAI_AGAIN',
+        ];
         return retryableCodes.includes(code);
     },
 
@@ -464,18 +475,38 @@ export const BaseProvider = {
 
     /**
      * 通用的下载 Buffer 逻辑 (带代理支持)
+     *
+     * 结果直链常放在中转站自己的对象存储/CDN 上，一次瞬时断连就让整次生成失败太浪费：
+     * 这里对网络错误做有限重试，并在直连失败时复用系统代理回退（与提交请求一致）。
      */
-    async asyncDownloadToBuffer(url, useProxy = false, { signal } = {}) {
-        const fetchOptions = { signal };
-        this.injectProxy(fetchOptions, useProxy);
-        let response;
-        try {
-            response = await networkFetch(url, fetchOptions);
-            if (!response.ok) throw new Error(`素材下载失败：HTTP ${response.status}`);
-            return Buffer.from(await response.arrayBuffer());
-        } catch (error) {
-            throw annotateProviderError(error, { stage: 'download', response });
+    async asyncDownloadToBuffer(url, useProxy = false, { signal, attempts = 3 } = {}) {
+        const totalAttempts = Math.max(1, Math.min(5, Number(attempts) || 3));
+        let lastError;
+        for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+            const fetchOptions = { signal };
+            this.injectProxy(fetchOptions, useProxy);
+            let response;
+            try {
+                response = await this.fetchWithSystemProxyFallback(url, fetchOptions);
+                if (!response.ok) {
+                    const error = Object.assign(new Error(`素材下载失败：HTTP ${response.status}`), {
+                        status: response.status,
+                    });
+                    throw annotateProviderError(error, { stage: 'download', response });
+                }
+                return Buffer.from(await response.arrayBuffer());
+            } catch (error) {
+                lastError = error;
+                const retryable = this.isRetryableNetworkError(error)
+                    || this.isRetryableResponseError(error)
+                    || (Number(error?.status) >= 500 && Number(error?.status) <= 599);
+                if (!retryable || attempt >= totalAttempts || signal?.aborted) {
+                    throw annotateProviderError(error, { stage: 'download', response });
+                }
+                await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+            }
         }
+        throw annotateProviderError(lastError, { stage: 'download' });
     },
 
     /**

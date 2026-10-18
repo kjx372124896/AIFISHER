@@ -13,6 +13,9 @@ import {
 } from '../server/providerFramework/taskProtocols.js';
 import { BUILTIN_PROTOCOLS, protocolById } from '../server/providerFramework/protocols.js';
 import { loadDynamicModelCatalog } from '../server/providerFramework/catalog.js';
+import { providerFrameworkStore } from '../server/providerFramework/store.js';
+import { canRecoverTask, recoverTask } from '../server/providerFramework/dynamicProvider.js';
+import { remoteTaskReference } from '../server/generation/generationTaskRecovery.js';
 import {
   isTaskRelayBaseUrl,
   suggestCapability,
@@ -270,6 +273,182 @@ describe('task protocol runner', () => {
         timeoutMs: 5000,
       }),
     ).rejects.toThrow('额度不足');
+  });
+
+  it('reports the submitted task so a dropped poll or download can be re-checked later', async () => {
+    const events = [];
+    let polls = 0;
+    const { request } = createRelay({
+      '/v1/image/generations': () => ({ task_id: 'task_abc', status: 'queued' }),
+      '/v1/image/generations/task_abc': () => {
+        polls += 1;
+        if (polls === 1) return { data: { status: 'IN_PROGRESS' } };
+        const error = new TypeError('fetch failed');
+        error.cause = { code: 'ECONNRESET' };
+        throw error;
+      },
+    });
+    await expect(
+      runTaskProtocol({
+        spec: { ...TASK_PROTOCOL_SPECS['async-image-tasks'], pollIntervalMs: 250 },
+        provider,
+        protocol,
+        model: { upstreamModelId: 'zhenzhen-image-g-v2-lowprice' },
+        params: { prompt: 'cup', resolution: '1K' },
+        request,
+        download,
+        timeoutMs: 1000,
+        onBeforeSubmit: (slot) => events.push(['before', slot]),
+        onSubmitted: (taskId, slot) => events.push(['after', taskId, slot]),
+      }),
+    ).rejects.toThrow();
+    expect(events).toEqual([
+      ['before', 0],
+      ['after', 'task_abc', 0],
+    ]);
+  });
+
+  it('marks a submit without any response as an uncertain submission', async () => {
+    const request = async () => {
+      const error = new TypeError('fetch failed');
+      error.cause = { code: 'ECONNRESET' };
+      throw error;
+    };
+    await expect(
+      runTaskProtocol({
+        spec: TASK_PROTOCOL_SPECS['async-image-tasks'],
+        provider,
+        protocol,
+        model: { upstreamModelId: 'seedream-v5-pro-t2i' },
+        params: { prompt: 'cup' },
+        request,
+        download,
+        timeoutMs: 2000,
+        markSubmissionUncertain: true,
+      }),
+    ).rejects.toMatchObject({ submissionUncertain: true });
+  });
+
+  it('tags reference upload failures so the message stays accurate', async () => {
+    const request = async () => {
+      throw Object.assign(new Error('HTTP 502'), { status: 502 });
+    };
+    const localImage = `data:image/png;base64,${Buffer.from('pixels').toString('base64')}`;
+    await expect(
+      runTaskProtocol({
+        spec: TASK_PROTOCOL_SPECS['async-image-tasks'],
+        provider,
+        protocol,
+        model: { upstreamModelId: 'seedream-v5-pro-i2i' },
+        params: { prompt: 'cup', images: [localImage] },
+        request,
+        download,
+        timeoutMs: 2000,
+      }),
+    ).rejects.toMatchObject({ code: 'REFERENCE_UPLOAD_FAILED', status: 502 });
+  });
+});
+
+describe('remote task recovery', () => {
+  const relayState = {
+    providers: [
+      { id: 'p1', name: 'Seedance 中转', baseUrl: 'https://relay.test', apiKey: 'sk-test', headers: {} },
+    ],
+    models: [
+      {
+        id: 'm1',
+        providerId: 'p1',
+        name: 'zhenzhen-image-g-v2-lowprice',
+        upstreamModelId: 'zhenzhen-image-g-v2-lowprice',
+        capability: 'image',
+        protocolId: 'async-image-tasks',
+      },
+    ],
+    protocols: [],
+  };
+
+  const reference = remoteTaskReference({
+    taskId: 'task_abc',
+    providerName: 'DynamicProtocolProvider',
+    modelId: 'm1',
+    submitUrl: 'https://relay.test/v1/image/generations',
+    queryUrl: 'https://relay.test/v1/image/generations/task_abc',
+    apiKey: 'sk-test',
+  });
+
+  async function withRelay(run) {
+    const original = providerFrameworkStore.read;
+    providerFrameworkStore.read = () => relayState;
+    try {
+      return await run();
+    } finally {
+      providerFrameworkStore.read = original;
+    }
+  }
+
+  it('matches a stored receipt against the current provider settings', async () => {
+    await withRelay(() => {
+      expect(canRecoverTask('image', reference, 'zhenzhen-image-g-v2-lowprice')).toBe(true);
+      expect(canRecoverTask('video', reference, 'zhenzhen-image-g-v2-lowprice')).toBe(false);
+      // 换了 Key 的收据不能拿来查询，避免误取别的账号的任务。
+      expect(canRecoverTask('image', { ...reference, credentialFingerprint: 'f'.repeat(64) }, '')).toBe(false);
+    });
+  });
+
+  it('fetches the finished result of an already submitted task', async () => {
+    const result = await withRelay(() =>
+      recoverTask(
+        'image',
+        { remoteTasks: [reference], requestedCount: 1, projectId: 'p' },
+        { imageModel: 'zhenzhen-image-g-v2-lowprice' },
+        {},
+        undefined,
+        {
+          request: async () => ({
+            code: 'success',
+            data: { status: 'SUCCESS', result_url: 'https://cdn.test/recovered.png' },
+          }),
+          download: async (url) => Buffer.from(String(url)),
+        },
+      ),
+    );
+    expect(result.status).toBe('success');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].format).toBe('png');
+    expect(result.results[0].buffer.toString()).toBe('https://cdn.test/recovered.png');
+  });
+
+  it('keeps waiting while the upstream task is still running', async () => {
+    const result = await withRelay(() =>
+      recoverTask('image', { remoteTasks: [reference], requestedCount: 1 }, {}, {}, undefined, {
+        request: async () => ({ data: { status: 'IN_PROGRESS' } }),
+        download: async () => Buffer.from(''),
+      }),
+    );
+    expect(result.status).toBe('pending');
+  });
+
+  it('reports the upstream failure and refuses mismatched settings', async () => {
+    const failed = await withRelay(() =>
+      recoverTask('image', { remoteTasks: [reference], requestedCount: 1 }, {}, {}, undefined, {
+        request: async () => ({ data: { status: 'FAILURE', fail_reason: '内容审核未通过' } }),
+        download: async () => Buffer.from(''),
+      }),
+    );
+    expect(failed.status).toBe('failed');
+    expect(String(failed.error.message)).toContain('内容审核');
+
+    const mismatched = await withRelay(() =>
+      recoverTask(
+        'image',
+        { remoteTasks: [{ ...reference, endpointFingerprint: 'a'.repeat(64) }], requestedCount: 1 },
+        {},
+        {},
+        undefined,
+        { request: async () => ({}), download: async () => Buffer.from('') },
+      ),
+    );
+    expect(mismatched).toEqual({ status: 'unknown', reason: 'settings_changed' });
   });
 });
 

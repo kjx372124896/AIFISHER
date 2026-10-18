@@ -14,6 +14,8 @@ const RECOVERABLE_PROVIDERS = {
   RunningHubGlobalVideoProvider: 'video',
   RunningHubImageProvider: 'image',
   RunningHubGlobalImageProvider: 'image',
+  // 异步任务协议（中转站）：同一 provider 同时覆盖图片与视频。
+  DynamicProtocolProvider: ['image', 'video'],
 };
 
 // Persist only an explicit receipt, never a provider config, URL, header or key.
@@ -60,7 +62,9 @@ export function remoteTaskReferences(task) {
 }
 
 export function isRecoverableProvider(kind, providerName) {
-  return Object.hasOwn(RECOVERABLE_PROVIDERS, providerName) && RECOVERABLE_PROVIDERS[providerName] === kind;
+  const kinds = RECOVERABLE_PROVIDERS[providerName];
+  if (!kinds) return false;
+  return Array.isArray(kinds) ? kinds.includes(kind) : kinds === kind;
 }
 
 export function canRecoverGenerationTask(task) {
